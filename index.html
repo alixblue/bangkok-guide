@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d4256b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bangkok">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Bangkok%20Field%20Guide%22%2C%22short_name%22%3A%22Bangkok%22%2C%22display%22%3A%22standalone%22%2C%22theme_color%22%3A%22%23d4256b%22%2C%22background_color%22%3A%22%23f4f5f2%22%7D">
+<title>Bangkok Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: full-height app. Left panel (tabs: Places / Day plans / Events), right map. Stacks on phones. */
+:root{
+  --bg:#f4f5f2; --panel:#ffffff; --ink:#1d2326; --muted:#667074; --line:#dfe2de;
+  --accent:#d4256b;            /* tuk-tuk pink */
+  --accent-ink:#ffffff;
+  --c-culture:#c2410c; --c-art:#7c3aed; --c-food:#d4256b; --c-market:#b7791f;
+  --c-nature:#2f855a; --c-workshop:#0e7490; --c-view:#2b50c8; --c-night:#4338ca; --c-event:#111111;
+  --f-display:'Bricolage Grotesque',system-ui,sans-serif; --f-body:'Instrument Sans',system-ui,sans-serif;
+  --tile-filter:none;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12171a; --panel:#1b2226; --ink:#e8ecea; --muted:#9aa5a8; --line:#2c363b;
+  --accent:#ff5c9a; --accent-ink:#1b0710;
+  --c-culture:#fb923c; --c-art:#a78bfa; --c-food:#ff5c9a; --c-market:#f2c14e;
+  --c-nature:#5fd08e; --c-workshop:#4fd1e8; --c-view:#7aa2ff; --c-night:#a5b4fc; --c-event:#f5f5f5;
+  --tile-filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.7); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12171a; --panel:#1b2226; --ink:#e8ecea; --muted:#9aa5a8; --line:#2c363b;
+  --accent:#ff5c9a; --accent-ink:#1b0710;
+  --c-culture:#fb923c; --c-art:#a78bfa; --c-food:#ff5c9a; --c-market:#f2c14e;
+  --c-nature:#5fd08e; --c-workshop:#4fd1e8; --c-view:#7aa2ff; --c-night:#a5b4fc; --c-event:#f5f5f5;
+  --tile-filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.7); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--f-body)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-columns:minmax(340px,430px) 1fr;height:100%}
+.side{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--panel);border-right:1px solid var(--line)}
+#map{height:100%;min-width:0;background:var(--bg)}
+.leaflet-tile-pane{filter:var(--tile-filter)}
+
+header{padding:16px 16px 10px}
+h1{font:700 26px/1.05 var(--f-display);margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.sub b{color:var(--ink)}
+.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 16px;gap:18px}
+.tab{background:none;border:0;padding:8px 0;color:var(--muted);border-bottom:2px solid transparent;font-weight:600}
+.tab[aria-selected="true"]{color:var(--ink);border-color:var(--accent)}
+.scroll{overflow:auto;flex:1;min-height:0;padding:14px 16px 24px}
+.pane[hidden]{display:none}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:none;border-radius:99px;padding:4px 10px;font-weight:500}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--col)}
+.chip[aria-pressed="false"]{opacity:.45}
+.chip[aria-pressed="false"] i{background:none;box-shadow:inset 0 0 0 2px var(--col)}
+input[type=search],input[type=text],input[type=date],textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.prices{display:grid;gap:8px;margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+.prices h2,.sec{font:600 11px var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
+.prow{display:grid;grid-template-columns:84px 1fr 78px;gap:8px;align-items:center}
+.prow label{display:flex;gap:6px;align-items:center}
+.prow i{width:8px;height:8px;border-radius:50%;background:var(--col)}
+.prow output{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.count{display:flex;justify-content:space-between;color:var(--muted);margin:10px 0 6px}
+
+.item{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:start}
+.item:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--col);margin-top:5px}
+.item.seen .nm{text-decoration:line-through;text-decoration-thickness:1px;opacity:.6}
+.nm{font-weight:600}
+.meta{color:var(--muted);font-size:12.5px}
+.price{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+
+.plan{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:none;text-align:left;width:100%;display:block}
+.plan:hover{border-color:var(--accent)}
+.plan h3{margin:0 0 2px;font:700 17px var(--f-display)}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;border-radius:4px;padding:1px 6px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);margin-right:6px}
+.back{background:none;border:0;color:var(--accent);font-weight:600;padding:0 0 10px}
+.steps{list-style:none;margin:12px 0 0;padding:0}
+.step{display:grid;grid-template-columns:34px 1fr;gap:10px;padding-bottom:4px}
+.step .n{width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:700}
+.step .t{font-weight:600;font-variant-numeric:tabular-nums}
+.leg{margin:2px 0 10px 44px;padding-left:10px;border-left:2px dashed var(--line);color:var(--muted);font-size:12.5px}
+.step .why{margin:2px 0 0}
+.stepname{background:none;border:0;padding:0;font-weight:600;text-align:left;text-decoration:underline;text-decoration-color:var(--line)}
+
+.ev{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:54px 1fr;gap:12px}
+.date{text-align:center;font-variant-numeric:tabular-nums;line-height:1.1}
+.date b{display:block;font:700 22px var(--f-display)}
+.date span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.ev button.nm{background:none;border:0;padding:0;text-align:left}
+.badge{font-size:11px;font-weight:600;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted);margin-left:4px;white-space:nowrap}
+.badge.free{color:var(--c-nature);border-color:var(--c-nature)}
+.addev{border:1px dashed var(--line);border-radius:8px;padding:12px;margin-top:14px;display:grid;gap:8px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:7px 12px;font-weight:600}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.note{font-size:12px;color:var(--muted);margin-top:14px}
+
+.pin{width:26px;height:26px;border-radius:50%;background:var(--col);color:#fff;display:grid;place-items:center;font:700 12px var(--f-body);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.pin{position:relative}
+.pin .rt{position:absolute;top:21px;left:50%;transform:translateX(-50%);background:var(--panel);color:var(--ink);font:600 10px var(--f-body);padding:0 3px;border-radius:3px;border:1px solid var(--line);white-space:nowrap}
+.pin.seen{opacity:.5}
+.pin.fav{box-shadow:0 0 0 3px var(--accent),0 1px 4px rgba(0,0,0,.4)}
+.pin.num{width:30px;height:30px;font-size:14px;background:var(--accent);color:var(--accent-ink)}
+.pin.ev{background:var(--c-event);color:var(--bg);border-radius:6px;transform:rotate(45deg)}
+.pin.ev span{transform:rotate(-45deg)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink)}
+.pop b{font:700 15px var(--f-display)}
+.pop p{margin:6px 0}
+.pop a{color:var(--accent)}
+.pop button{margin-top:4px}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:50% 50%}
+  #map{order:-1}
+  .side{border-right:0;border-top:1px solid var(--line)}
+  header{padding-top:10px}
+  h1{font-size:22px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.pop a.btn{color:var(--accent-ink);text-decoration:none;display:inline-block}.pop a.btn.ghost,a.btn.ghost{color:var(--ink)}a.btn{text-decoration:none;display:inline-block}
+[hidden]{display:none!important}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer}
+.progress{height:4px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden}
+.progress i,.bar i{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden}
+.plan.complete{border-color:var(--c-nature)}
+.nextbox{border:1px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0;background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.step.sdone .n{background:var(--c-nature)}
+.step.sdone .stepname{text-decoration:line-through;opacity:.7}
+.pin.num.seen{background:var(--c-nature);opacity:.85}
+details.dist{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 0 12px}
+details.dist summary{cursor:pointer;font-weight:600}
+#distList{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.dchip{padding:2px 8px;font-size:12.5px}
+.dchip[disabled]{opacity:.4;cursor:default}
+.dchip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.wk{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:54px 1fr;gap:12px}
+.wk.cur{background:color-mix(in srgb,var(--accent) 7%,transparent);border-radius:8px;padding:10px 8px}
+.wk.past{opacity:.55}
+.wksel{width:100%;margin-top:6px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-size:12.5px}
+.trackctl button{display:block;border:0;background:var(--panel);color:var(--ink);padding:7px 10px;font:600 13px var(--f-body);width:100%;text-align:left}
+.trackctl button+button{border-top:1px solid var(--line)}
+.trackctl button[aria-pressed="true"]{color:#2b7bff}
+.me{width:22px;height:22px;border-radius:50%;background:#2b7bff;border:3px solid #fff;box-shadow:0 0 0 2px rgba(43,123,255,.35),0 1px 4px rgba(0,0,0,.4);position:relative}
+.me.hd::after{content:'';position:absolute;left:50%;top:-12px;margin-left:-6px;border:6px solid transparent;border-bottom:10px solid #2b7bff;transform-origin:6px 22px;transform:rotate(var(--hd))}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;z-index:2000;max-width:90vw;font-weight:500;cursor:pointer}
+#mapToggle{display:none}
+.status{font-size:12px;color:var(--muted)}
+@media (max-width:760px){
+  #mapToggle{display:inline-block}
+  body.bigmap .app{grid-template-rows:82% 18%}
+  .tabs{gap:14px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <header>
+      <h1 id="cityTitle">Field Guide</h1>
+      <div class="sub"><span><b id="daysLeft">–</b> days until you leave (<span id="leaveLabel"></span>)</span><span><b id="seenCount">0</b>/<span id="totalCount">0</span> done</span></div>
+      <div class="progress"><i id="progBar" style="width:0"></i></div>
+      <div class="row" style="justify-content:space-between;margin-top:6px"><span class="status"><span id="trackState"></span> <span id="syncState"></span></span><span class="row" style="gap:6px"><button class="btn ghost" type="button" id="backupBtn" style="padding:3px 10px">Backup</button><button class="btn ghost" type="button" id="mapToggle" style="padding:3px 10px">⇕ Map size</button></span></div>
+      <div id="backup" hidden class="addev" style="margin-top:8px"><span class="meta">Your done marks, favourites, ratings, moved pins, weekend choices and own events live in this browser only. To move them to another device or browser, copy this code there and press Load.</span>
+        <textarea id="backupTxt" rows="3" aria-label="Backup code" style="width:100%;font:12px monospace;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)"></textarea>
+        <div class="row"><button class="btn" type="button" id="backupCopy">Copy code</button><button class="btn ghost" type="button" id="backupLoad">Load pasted code</button><span class="meta" id="backupState"></span></div></div>
+    </header>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="places">Places</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="plans">Day plans</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="weekends">Weekends</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="events">Events</button>
+    </div>
+    <div class="scroll">
+      <section class="pane" id="pane-places">
+        <div class="chips" id="catChips"></div>
+        <details class="dist"><summary id="distSum">Districts</summary><div id="distList"></div></details>
+        <input type="search" id="q" placeholder="Search name, area or district (e.g. Chinatown)" aria-label="Search places">
+        <div class="prices"><h2>Max price per category (per person)</h2><div id="priceRows" style="display:grid;gap:6px"></div></div>
+        <div class="row" style="margin-top:10px;align-items:center">
+          <label for="sort" class="sec">Sort by</label>
+          <select id="sort" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)">
+            <option value="cat">Category, A–Z</option><option value="rating">Best reviewed</option>
+            <option value="near">Closest</option><option value="cheap">Cheapest first</option><option value="fav">Favorites first</option></select>
+          <button class="btn ghost" type="button" id="locate" title="Track my location for Closest">📍</button></div>
+        <div class="meta" id="refNote"></div>
+        <div class="count"><span id="shown"></span><span><label><input type="checkbox" id="favOnly"> favorites</label> &nbsp; <label><input type="checkbox" id="hideSeen"> hide done</label></span></div>
+        <div id="list"></div>
+      </section>
+      <section class="pane" id="pane-plans" hidden>
+        <div id="planList"></div>
+        <div id="planDetail" hidden></div>
+      </section>
+      <section class="pane" id="pane-weekends" hidden>
+        <div id="wkList"></div>
+      </section>
+      <section class="pane" id="pane-events" hidden>
+        <div class="chips" id="evFilter"></div>
+        <div id="evList"></div>
+        <form class="addev" id="evForm">
+          <h2 class="sec">Add an event you found (pop-up, festival, workshop)</h2>
+          <input type="text" id="evTitle" placeholder="Title, e.g. K-beauty pop-up" required>
+          <div class="row"><input type="date" id="evDate" required style="flex:1"><input type="text" id="evPlace" placeholder="Where" style="flex:1"></div>
+          <input type="text" id="evNote" placeholder="Note (free entry? no reservation?)">
+          <div class="row"><button class="btn ghost" type="button" id="evPick">Pick spot on map</button><button class="btn" type="submit">Save</button><span class="meta" id="evPickState"></span></div>
+        </form>
+      </section>
+      <p class="note">Star ratings are approximate Google Maps scores typed in from memory, not live; tap a pin to update one or open the real reviews. Pins are approximate: use “Move pin” in a popup to fix one. Prices are rough foreigner rates in baht. Hours, show times and festival dates change: check before you go.</p>
+    </div>
+  </aside>
+  <main id="map" aria-label="City map"></main>
+</div>
+<div id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------------------------------------------------------------
+   DATA — edit freely. Add places in PLACES, plans in PLANS, weekends in WEEKENDS, events in EVENTS.
+---------------------------------------------------------------- */
+/* CITY CONFIG: the only block to change when you reuse this file for another city */
+const CITY = {name:'Bangkok', center:[13.7469,100.5200], zoom:12, currency:'฿', leave:'2027-02-27', leaveLabel:'27 Feb 2027'};
+const LEAVE = new Date(CITY.leave+'T00:00:00');
+
+const CATS = {
+  culture :{label:'Temples & heritage', col:'--c-culture', glyph:'T', max:800,  step:50},
+  art     :{label:'Art & design',       col:'--c-art',     glyph:'A', max:800,  step:50},
+  food    :{label:'Food',               col:'--c-food',    glyph:'F', max:1500, step:50},
+  market  :{label:'Markets',            col:'--c-market',  glyph:'M', max:500,  step:50},
+  nature  :{label:'Green & water',      col:'--c-nature',  glyph:'G', max:300,  step:25},
+  workshop:{label:'Workshops & shows',  col:'--c-workshop',glyph:'W', max:3000, step:100},
+  view    :{label:'Views',              col:'--c-view',    glyph:'V', max:1500, step:100},
+  night   :{label:'Nightlife & music',  col:'--c-night',   glyph:'N', max:1000, step:50},
+};
+
+/* The 50 districts (khet) of Bangkok, for the coverage panel. Places outside the city use OUTSIDE. */
+const DISTRICTS = ['Phra Nakhon','Dusit','Nong Chok','Bang Rak','Bang Khen','Bang Kapi','Pathum Wan','Pom Prap Sattru Phai','Phra Khanong','Min Buri',
+  'Lat Krabang','Yan Nawa','Samphanthawong','Phaya Thai','Thon Buri','Bangkok Yai','Huai Khwang','Khlong San','Taling Chan','Bangkok Noi',
+  'Bang Khun Thian','Phasi Charoen','Nong Khaem','Rat Burana','Bang Phlat','Din Daeng','Bueng Kum','Sathon','Bang Sue','Chatuchak',
+  'Bang Kho Laem','Prawet','Khlong Toei','Suan Luang','Chom Thong','Don Mueang','Ratchathewi','Lat Phrao','Watthana','Bang Khae',
+  'Lak Si','Sai Mai','Khan Na Yao','Saphan Sung','Wang Thonglang','Khlong Sam Wa','Bang Na','Thawi Watthana','Thung Khru','Bang Bon'];
+const OUTSIDE = 'Outside Bangkok';
+
+/* Place: id, name, cat, lat, lng, price (THB pp, 0 = free), area, hours, best (when to go / crowd note), about, district */
+const P = (id,name,cat,lat,lng,price,area,hours,best,about,dist,tags='')=>({id,name,cat,lat,lng,price,area,hours,best,about,dist,tags});
+const PLACES = [
+  // Phra Nakhon (Rattanakosin island and Old Town)
+  P('grand-palace','Grand Palace','culture',13.7500,100.4913,500,'Rattanakosin','08:30–15:30 daily','Be at the gate at 08:30. Tour groups arrive by 10:00 and the courtyard is baking by noon.','Strict dress code (covered shoulders and knees). Ticket also covers Wat Phra Kaew. Ignore anyone outside saying it is closed.','Phra Nakhon'),
+  P('wat-pho','Wat Pho','culture',13.7465,100.4927,300,'Rattanakosin','08:00–18:30','Late afternoon (after 16:00) is calm and the light is warm on the chedis.','Giant reclining Buddha, the birthplace of Thai massage. Bangkok Art Biennale venue from 29 Oct 2026.','Phra Nakhon'),
+  P('museum-siam','Museum Siam','art',13.7440,100.4983,300,'Rattanakosin','10:00–18:00, closed Mon','Weekday mornings. Good rainy-day cover.','Playful take on Thai identity in a neoclassical building. Bangkok Art Biennale venue from 29 Oct 2026.','Phra Nakhon'),
+  P('nat-museum','National Museum Bangkok','culture',13.7575,100.4932,200,'Rattanakosin','09:00–16:00, Wed–Sun','Weekday mornings. Allow 2 hours.','Huge collection of Thai art and artifacts, plus the Buddhaisawan chapel murals. Bangkok Art Biennale venue.','Phra Nakhon'),
+  P('pak-khlong','Pak Khlong Talat (flower market)','market',13.7418,100.4963,0,'Rattanakosin','24h, best 22:00–05:00','Very early morning or late at night for the full flower stacks. Daytime is quiet.','Bangkok\'s wholesale flower and veg market. Photogenic, cheap garlands.','Phra Nakhon'),
+  P('phra-sumen','Phra Sumen Fort & Santichaiprakan Park','nature',13.7640,100.4960,0,'Banglamphu','Park open daily, roughly 05:00–22:00','Sunset by the river, after a museum day.','Whitewashed 18th-century fort and a small riverside park with the Rama VIII bridge view. Locals play takraw and do aerobics here.','Phra Nakhon'),
+  P('wat-suthat','Wat Suthat & the Giant Swing','culture',13.7510,100.5011,100,'Old Town','~08:30–20:00 (verify)','Morning, before the heat. Quiet compared with the big three.','Huge viharn with fine murals and a gallery of golden Buddhas. The red Giant Swing stands outside, free to see.','Phra Nakhon'),
+  P('loha-prasat','Loha Prasat (Wat Ratchanatdaram)','culture',13.7546,100.5040,0,'Old Town','~09:00–17:00','Late morning; climb to the top terrace for the Golden Mount view.','The only surviving "metal castle" temple, with 37 iron spires and corridors you can climb. Donation welcome.','Phra Nakhon'),
+  P('thipsamai','Thip Samai Pad Thai','food',13.7519,100.5030,150,'Old Town','~09:00–00:00, closed Tue','Arrive before 18:00 or after 21:30. The queue peaks 19:00–20:30.','Famous pad thai wrapped in egg, about 120 baht. Get the fresh orange juice.','Phra Nakhon'),
+  P('jayfai','Raan Jay Fai','food',13.7527,100.5043,1500,'Old Town','Verify; closed some days','Go earlier than you think and expect a long wait.','Michelin-starred crab omelette and drunken noodles. A splurge; the queue is part of it.','Phra Nakhon'),
+  P('krua-apsorn','Krua Apsorn','food',13.7560,100.5025,400,'Old Town','Lunch to early evening, closed Sun (verify)','Early lunch (11:00) to skip the office crowd.','Royal-style Thai home cooking. Crab meat with yellow chilli and the crab omelette are the classics.','Phra Nakhon'),
+  P('mont-nomsod','Mont Nom Sod','food',13.7546,100.5011,60,'Old Town','Afternoon to late evening (verify)','After dinner nearby; the queue moves fast.','Old-school milk bar: thick toast with custard or condensed milk and a glass of cold milk.','Phra Nakhon'),
+  // Pom Prap Sattru Phai
+  P('wat-saket','Wat Saket (Golden Mount)','culture',13.7536,100.5067,100,'Old Town','07:00–19:00','Golden hour. Fewer people than the big three and a 360° view over the old city.','Spiral walkway of about 300 steps. Hosts the big temple fair around Loy Krathong.','Pom Prap Sattru Phai'),
+  P('ban-bat','Ban Bat (monk bowl village)','workshop',13.7520,100.5065,0,'Old Town','Daytime, workshops mostly Mon–Sat','Late morning when the families are hammering.','The last community still hand-making monks\' alms bowls from eight strips of steel. Watching is free; a bowl costs a few hundred baht and up.','Pom Prap Sattru Phai'),
+  P('rajadamnern','Rajadamnern Muay Thai Stadium','workshop',13.7570,100.5160,1800,'Old Town','Fight nights (check schedule)','Cheaper stands are plenty; ringside only for the big cards.','Historic stadium. Foreigner tickets cost more than Thai ones.','Pom Prap Sattru Phai'),
+  P('kunsthalle','Bangkok Kunsthalle','art',13.7422,100.5122,0,'Chinatown edge','~14:00–20:00, Wed–Sun','Afternoon, then walk into Yaowarat for dinner.','Contemporary art in a burnt-out former printing house. Most exhibitions free; check the programme.','Pom Prap Sattru Phai'),
+  // Dusit
+  P('benchama','Wat Benchamabophit (Marble Temple)','culture',13.7670,100.5140,50,'Dusit','08:00–17:30','Early morning. Monks chant around 07:00.','Carrara marble temple, one of the prettiest and least crowded.','Dusit'),
+  // Samphanthawong (Chinatown)
+  P('wat-traimit','Wat Traimit (Golden Buddha)','culture',13.7384,100.5100,100,'Chinatown','08:00–17:00','Early afternoon, before the street food opens.','Five-tonne solid gold Buddha. Short visit, pair with Yaowarat.','Samphanthawong'),
+  P('wat-mangkon','Wat Mangkon Kamalawat','culture',13.7433,100.5104,0,'Chinatown','~06:00–18:00','Late afternoon, when incense smoke and prayer are at their busiest.','The most important Chinese-Buddhist temple in the city, right off Charoen Krung. Centre of the Vegetarian Festival.','Samphanthawong'),
+  P('sampeng','Sampeng Lane','market',13.7425,100.5035,0,'Chinatown','~08:00–17:00','Weekday mornings; it is a tight squeeze by noon.','Narrow wholesale lane of beads, toys, fabric and hair clips. Cheap and chaotic.','Samphanthawong'),
+  P('talat-noi','Talat Noi','art',13.7330,100.5120,0,'Charoen Krung','Wander daytime','Late morning to sunset. Many shopfronts shut on Sundays.','Old Chinese-Thai quarter: auto-parts alleys, street art, So Heng Tai mansion, riverside cafés. Bangkok Design Week hub (18–28 Feb 2027).','Samphanthawong'),
+  P('yaowarat','Yaowarat street food','food',13.7400,100.5090,300,'Chinatown','From ~17:30, peaks 19:00–23:00','Arrive at 18:00 as stalls set up. Many close Mondays.','Seafood grills, roast duck, mango sticky rice, toast stalls. Graze from stall to stall.','Samphanthawong'),
+  P('nai-ek','Nai Ek Roll Noodles','food',13.7405,100.5080,100,'Chinatown','~08:00–00:00 (verify)','Any time; good fallback when queues elsewhere are long.','Peppery rolled rice noodle soup with crispy pork, off Yaowarat Road.','Samphanthawong'),
+  // Bang Rak (Charoen Krung, Silom)
+  P('river-city','River City Bangkok','art',13.7303,100.5137,0,'Charoen Krung','~10:00–20:00','Late afternoon, then the river at sunset.','Art and antiques centre at Si Phraya pier with rotating exhibitions on the upper floors.','Bang Rak'),
+  P('warehouse30','Warehouse 30','art',13.7210,100.5133,0,'Charoen Krung','Most shops ~11:00–18:00 (verify)','Weekday afternoons. Check events on their page.','Renovated WWII-era warehouses: galleries, concept shops, events.','Bang Rak'),
+  P('bangkokian-museum','Bangkokian Museum','culture',13.7270,100.5165,0,'Charoen Krung','~10:00–16:00, Wed–Sun (verify)','Morning, before the street gets hot.','A 1930s family house kept as it was, showing middle-class Bangkok life. Free, donation welcome.','Bang Rak'),
+  P('assumption','Assumption Cathedral','culture',13.7235,100.5143,0,'Charoen Krung','Daytime; respect mass times','Mid-morning, when the light comes through the windows.','Red-brick 1910s cathedral in a quiet courtyard behind the Oriental hotel.','Bang Rak'),
+  P('sri-mariamman','Sri Maha Mariamman Temple (Wat Khaek)','culture',13.7240,100.5225,0,'Silom','~06:00–20:00','Morning puja, or during Navaratri in October.','Colourful South Indian Hindu temple on Silom Road. No photos inside, shoes off.','Bang Rak'),
+  P('prachak','Prachak Roasted Duck','food',13.7240,100.5148,150,'Charoen Krung','Morning to evening (verify)','Lunch on weekdays.','Old-school roast duck and pork on rice on Charoen Krung, near the river.','Bang Rak'),
+  P('mahanakhon','Mahanakhon SkyWalk','view',13.7237,100.5285,1000,'Silom','10:00–00:00','Buy a sunset slot (about 17:30 in Dec–Jan). Weekdays are quieter.','Rooftop view with a glass floor. Pricey; a rooftop bar is the cheaper alternative.','Bang Rak'),
+  P('silom-cooking','Silom Thai Cooking School','workshop',13.7245,100.5255,1300,'Silom','Morning, afternoon and evening classes','Book a day or two ahead; morning class includes the market visit.','Small-group classes, about 4 hours, several dishes. Price approximate.','Bang Rak'),
+  // Pathum Wan (Siam, Lumphini, Chula)
+  P('bacc','Bangkok Art & Culture Centre (BACC)','art',13.7468,100.5301,0,'Siam','10:00–20:00, closed Mon','Weekdays after 14:00. Free; check what is on.','Main public contemporary art space, with small design shops and cafés. Bangkok Art Biennale venue from 29 Oct 2026.','Pathum Wan'),
+  P('jim-thompson','Jim Thompson House','art',13.7490,100.5280,250,'Siam','10:00–17:00 daily, guided tours only','First tour of the day or after 15:30. No booking needed; walk-in tours run all day.','Teak houses with an art collection, plus the Jim Thompson Art Center for exhibitions. 250 baht adults.','Pathum Wan'),
+  P('erawan','Erawan Shrine','culture',13.7443,100.5404,0,'Ratchaprasong','~06:00–23:00','Late afternoon, when dancers perform for offerings.','Busy Brahma shrine in front of the Grand Hyatt. Ten-minute stop.','Pathum Wan'),
+  P('siam-discovery','Siam Discovery, Siam Center & Paragon atriums','market',13.7466,100.5311,0,'Siam','10:00–22:00','Weekends hold pop-ups. Check atrium events.','Thai designer labels, beauty brands and rotating pop-ups. Paragon and CentralWorld are Biennale venues.','Pathum Wan'),
+  P('lumphini','Lumphini Park','nature',13.7314,100.5418,0,'Silom','~04:30–21:00','06:00 or 17:00. Monitor lizards around midday.','Central green lung. Tai chi and joggers in the morning; free Sunday concerts in the cool season.','Pathum Wan'),
+  P('snake-farm','Snake Farm (Queen Saovabha Institute)','workshop',13.7330,100.5365,200,'Silom','Shows weekdays 11:00 & 14:30, weekends 11:00','Arrive 20 minutes before a show for a front seat.','Thai Red Cross institute that makes antivenom, with a snake-handling show and a small museum.','Pathum Wan'),
+  P('chula-park','Chulalongkorn Centenary Park','nature',13.7385,100.5240,0,'Samyan','Daily, roughly 05:00–22:00','Late afternoon, with a drink from Samyan Mitrtown.','Sloped green roof and water-retention park designed to soak up floods. Good skyline photos.','Pathum Wan'),
+  // Khlong Toei / Watthana / Sathon / Bang Kho Laem
+  P('benjakitti','Benjakitti Forest Park & Skywalk','nature',13.7240,100.5580,0,'Khlong Toei','~05:00–21:00','Late afternoon. Cycle hire inside.','Elevated boardwalk over wetlands with skyline views.','Khlong Toei'),
+  P('khlong-toei-market','Khlong Toei Market','market',13.7225,100.5555,0,'Khlong Toei','Around the clock, busiest 05:00–09:00','Go early (06:00) with closed shoes; floors are wet.','Bangkok\'s biggest fresh market: mountains of fruit, seafood and curry pastes. Not for the squeamish.','Khlong Toei'),
+  P('benchasiri','Benchasiri Park','nature',13.7300,100.5690,0,'Phrom Phong','~05:00–21:00','Early evening, when the city cools.','Small sculpture park next to EmQuartier, with a lake and outdoor gym.','Khlong Toei'),
+  P('dib','Dib Bangkok','art',13.7150,100.5815,700,'Sukhumvit 40','10:00–19:00, Thu–Mon (closed Tue–Wed)','Weekday opening time. Allow 2–3 hours.','Bangkok\'s new international contemporary art museum in a reworked 1980s warehouse. 700 baht for non-Thais.','Khlong Toei'),
+  P('wattana-panich','Wattana Panich','food',13.7290,100.5865,150,'Ekkamai','~09:00–19:30 (verify)','Lunch on weekdays.','Beef noodle soup from a pot that has been simmering for decades.','Watthana'),
+  P('citycity','Bangkok CityCity Gallery','art',13.7230,100.5440,0,'Sathorn','Afternoons, Wed–Sun (verify)','Late afternoon after Lumphini.','Independent contemporary gallery with a small garden; one of the city\'s best-curated spaces.','Sathon'),
+  P('wat-yannawa','Wat Yannawa (junk-boat temple)','culture',13.7155,100.5160,0,'Sathorn pier','~08:00–17:00','Morning, pair with a boat from Sathorn pier.','Temple with a full-size stone Chinese junk boat, built when steamships replaced junks.','Sathon'),
+  P('asiatique','Asiatique The Riverfront','market',13.7046,100.5030,0,'Charoen Krung south','~16:00–00:00','Golden hour and the Ferris wheel at dusk.','Touristy night bazaar in old dock warehouses. Free shuttle boat from Sathorn pier.','Bang Kho Laem'),
+  // Thonburi side
+  P('wat-arun','Wat Arun','culture',13.7437,100.4889,200,'Thonburi','08:00–18:00','Cross by the cheap ferry from Tha Tien. Sunset from the opposite bank beats climbing it.','Porcelain-studded prang. Steep steps. Bangkok Art Biennale venue from 29 Oct 2026.','Bangkok Yai'),
+  P('wat-prayoon','Wat Prayoon','culture',13.7387,100.4990,0,'Thonburi','Grounds ~08:00–18:00','Afternoon, after Kudeejeen. Turtle hill is shaded.','Huge white chedi and a turtle-pond mound by the Memorial Bridge. Bangkok Art Biennale venue from 29 Oct 2026.','Thon Buri'),
+  P('kudeejeen','Kudeejeen & Santa Cruz Church','culture',13.7405,100.4960,0,'Thonburi','Community open daily; church opening varies','Early afternoon walk. Pair with Wat Arun and Wat Prayoon.','Portuguese-era Christian quarter. Try the kanom farang (old-style cake) from the family bakeries.','Thon Buri'),
+  P('talat-phlu','Talat Phlu','food',13.7215,100.4740,200,'Thonburi','All day, best from 16:00','Evening, as the street stalls light up.','Old market district famous for crispy pork, khanom buang and kway jap. BTS Talat Phlu.','Thon Buri'),
+  P('lhong1919','Lhong 1919','culture',13.7380,100.5040,0,'Khlong San','~08:00–18:00','Late afternoon. Free entry.','Restored Chinese merchant compound with a Mazu shrine, river views and cafés.','Khlong San'),
+  P('jam-factory','The Jam Factory','art',13.7300,100.5117,0,'Khlong San','~10:00–22:00 (shops vary)','Late afternoon into evening, sunset by the river.','Converted riverside warehouse with a café, bookshop, gallery and design shops.','Khlong San'),
+  P('iconsiam','ICONSIAM & SookSiam','market',13.7265,100.5102,0,'Khlong San','10:00–22:00','Late afternoon, then the riverside fountain show after dark.','Giant riverside mall. The SookSiam ground floor is an indoor floating-market of regional Thai food and crafts.','Khlong San'),
+  P('royal-barges','National Museum of Royal Barges','culture',13.7605,100.4850,200,'Bangkok Noi','09:00–17:00 daily (last entry ~16:00)','Morning. Small, about 45 minutes.','Shed of gilded royal barges, including the swan-headed Suphannahong. Camera fee extra.','Bangkok Noi'),
+  P('siriraj','Siriraj Medical Museum','culture',13.7590,100.4855,200,'Bangkok Noi','10:00–17:00, closed Tue','Late morning on a weekday.','Hospital museums of anatomy, pathology and forensics. Not for the faint-hearted; next door is the calmer Bimuksthan museum.','Bangkok Noi'),
+  P('wang-lang','Wang Lang Market','food',13.7555,100.4870,100,'Bangkok Noi','~08:00–18:00','Lunch, then the ferry across to Tha Chang.','Lanes of cheap snacks, curries over rice and clothes next to Siriraj hospital and the Wang Lang pier.','Bangkok Noi'),
+  P('baan-silapin','Baan Silapin (Artist\'s House)','art',13.7448,100.4770,0,'Khlong Bang Luang','10:00–18:00 daily; puppet show ~14:00 (not Wed)','Arrive around 13:30 for the 14:00 puppet show.','Century-old canal-side house with artists, a café and Hun Lek puppet shows. Entry free, donations welcome. MRT Bang Phai.','Phasi Charoen','house of artists artist house artists house khlong bang luang puppets canal'),
+  P('space-time-cube','Space & Time Cube','art',13.7130,100.4373,599,'Seacon Bangkae','~10:30–21:30','Weekdays. Good when it rains or the heat is too much.','Immersive digital-art rooms in the basement of Seacon Bangkae, MRT Phasi Charoen. Themes rotate. From about 599 baht.','Bang Khae','space and time cube immersive digital art'),
+  P('taling-chan-fm','Taling Chan Floating Market','market',13.7766,100.4565,0,'Taling Chan','Sat–Sun ~08:00–16:00','Before 11:00.','Small weekend market on a pontoon by the district office: grilled river prawns, som tam, boat tours.','Taling Chan'),
+  P('khlong-lat-mayom','Khlong Lat Mayom Floating Market','market',13.7745,100.4135,0,'Taling Chan','Sat–Sun ~08:00–16:00','Arrive by 09:30, before day-trippers.','Local weekend floating market with boat noodles, kanom and an orchard-canal boat trip.','Taling Chan'),
+  // North and east
+  P('chatuchak','Chatuchak Weekend Market','market',13.7999,100.5502,0,'Chatuchak','Sat–Sun ~09:00–18:00','Go at 09:00 and leave by noon. Heat and crowds build fast.','About 15,000 stalls. Use the clock tower as your meeting point. Cash helps.','Chatuchak'),
+  P('ortorkor','Or Tor Kor Market','food',13.7990,100.5465,200,'Chatuchak','~06:00–20:00','Pair with Chatuchak, just across the road.','Cleanest fresh market in town. Top fruit and ready-to-eat dishes.','Chatuchak'),
+  P('moca','MOCA Bangkok','art',13.8516,100.5628,280,'Chatuchak (north)','10:00–18:00, closed Mon','Weekend afternoon after Chatuchak. Air-conditioned and calm.','Big private museum of Thai modern art over five floors. Taxi from MRT Chatuchak Park.','Chatuchak'),
+  P('rotfai-park','Rot Fai Park (Wachirabenchathat)','nature',13.8110,100.5530,0,'Chatuchak','~04:30–21:00','Morning ride before Chatuchak opens.','Big park with bike rental and a butterfly garden, just north of the weekend market.','Chatuchak'),
+  P('bang-pho','Bang Pho woodcraft street','market',13.8065,100.5225,0,'Bang Sue','Daytime, most shops Mon–Sat','Weekday late morning.','Long road of carpenters and timber shops making carved doors, furniture and wooden toys. MRT Bang Pho.','Bang Sue'),
+  P('ari','Ari neighbourhood','food',13.7795,100.5445,200,'Ari','Cafés from ~08:00, street food all day','Weekend breakfast or lunch.','Leafy sois of independent cafés, bakeries and noodle stalls around BTS Ari.','Phaya Thai'),
+  P('phaya-thai-palace','Phaya Thai Palace','culture',13.7690,100.5340,40,'Victory Monument','Guided tours Sat–Sun 09:30 & 13:30','Arrive 15 minutes before the 09:30 tour.','European-style royal palace inside a hospital compound, with Café Narasingh in the old throne hall. BTS Victory Monument.','Ratchathewi'),
+  P('suan-pakkad','Suan Pakkad Palace','art',13.7565,100.5375,100,'Phaya Thai Rd','09:00–16:00 daily','Early afternoon; gardens are shaded.','Traditional teak houses in a garden with art and antiques, and the gilded Lacquer Pavilion. Short walk from BTS Phaya Thai.','Ratchathewi'),
+  P('boatnoodles','Victory Monument boat noodles','food',13.7650,100.5370,100,'Victory Monument','~08:00–20:00','Weekdays 14:00–16:00 is quiet.','Small bowls, order several. Row of shops along the canal by the monument.','Ratchathewi'),
+  P('rotfai-ratchada','Talat Rot Fai Ratchada','market',13.7650,100.5668,300,'Ratchada','~17:00–00:00, Thu–Sun (verify)','Arrive 18:30 before the crowd; best photos from the car park roof.','Night market of food stalls, vintage and bars behind Esplanade mall. Reopened in 2026; check it is running before you go.','Din Daeng'),
+  P('huai-khwang','Huai Khwang night market & Ganesha shrine','food',13.7785,100.5735,150,'Huai Khwang','Market evenings; shrine open late','After 20:00, when the shrine is busiest.','Local street-food market, plus a Ganesha shrine where people pray around the clock. MRT Huai Khwang.','Huai Khwang'),
+  P('rama9-park','Suan Luang Rama IX Park','nature',13.6875,100.6640,10,'Prawet','~05:00–19:00','Early morning or late afternoon; hire a bike.','Bangkok\'s biggest park, with themed gardens, a lake and a botanical garden. Taxi from BTS Udom Suk.','Prawet'),
+  P('mae-nak','Mae Nak Shrine (Wat Mahabut)','culture',13.7105,100.6040,0,'On Nut','Daytime','Late morning; pair with Rama IX Park.','Shrine to Bangkok\'s most famous ghost story, filled with dresses and gifts left for Mae Nak. A short walk from BTS On Nut.','Suan Luang'),
+  P('airforce-museum','Royal Thai Air Force Museum','culture',13.9180,100.6000,0,'Don Mueang','~08:00–16:00 (verify)','Weekday morning.','Hangars of vintage aircraft. Free. Near BTS Phahon Yothin 59 / Saphan Mai area.','Don Mueang'),
+  P('bang-khun-thian','Bang Khun Thian seaside mangroves','nature',13.5130,100.4330,0,'Bang Khun Thian','Daylight (verify access)','Late afternoon, sea breeze and sunset over the Gulf.','Bangkok\'s only stretch of coast: mangrove boardwalk and sinking-temple views near the sea. Taxi or Grab only.','Bang Khun Thian'),
+  // Near Bangkok / day trips
+  P('bangkrachao','Bang Krachao (Green Lung)','nature',13.6700,100.5700,150,'Phra Pradaeng','Daylight; floating market weekends','Cycle early or from 15:00. Boat from Khlong Toei pier.','Jungle island in a loop of the river, with bike lanes and Sri Nakhon Khuean Khan park. Bike rental about 100–150 baht. Bang Nam Phueng floating market runs at weekends.',OUTSIDE),
+  P('koh-kret','Koh Kret','workshop',13.9105,100.4930,400,'Nonthaburi','Daylight, best weekend','Weekend morning. Rent a bike for the loop.','Mon pottery island. Try throwing clay in a small workshop.',OUTSIDE),
+  P('erawan-museum','Erawan Museum','art',13.6222,100.5885,400,'Samut Prakan','~09:00–19:00 (verify)','Weekday morning; inside is cool.','Giant three-headed elephant with a stained-glass ceiling and antiques inside. BTS Chang Erawan.',OUTSIDE),
+  P('ancient-city','Ancient City (Muang Boran)','culture',13.5410,100.6240,700,'Samut Prakan','~09:00–19:00 (verify)','Weekdays. Rent a bike or golf cart; the park is huge.','Open-air park of scaled replicas of Thai monuments. BTS Kheha then a short taxi.',OUTSIDE),
+  P('maeklong','Maeklong Railway Market','market',13.4083,99.9988,0,'Samut Songkhram','About 8 train passes a day (times shift; check)','Ask at the station for the next train and be in place 10 minutes before.','Market on the tracks; vendors pull back awnings as the train comes through. Combine with Amphawa.',OUTSIDE),
+  P('amphawa','Amphawa Floating Market','market',13.4263,99.9560,150,'Samut Songkhram','Fri–Sun afternoons to evening (verify)','Arrive 15:30; firefly boats go after sunset.','Wooden shophouse canal with grilled seafood. Can stay over in a homestay.',OUTSIDE),
+  P('ayutthaya-mahathat','Wat Mahathat (Ayutthaya)','culture',14.3562,100.5679,50,'Ayutthaya','08:00–18:00','Early. The Buddha head in tree roots draws crowds after 10:00.','Ruined temple with the famous Buddha head in roots.',OUTSIDE),
+  P('ayutthaya-sisanphet','Wat Phra Si Sanphet','culture',14.3563,100.5558,50,'Ayutthaya','08:00–18:00','Late morning.','Three iconic chedis in the old royal palace grounds.',OUTSIDE),
+  P('ayutthaya-chaiwat','Wat Chaiwatthanaram','culture',14.3441,100.5424,50,'Ayutthaya','08:00–18:00','Golden hour, with the river behind.','Khmer-style temple. Best at sunset.',OUTSIDE),
+  P('river-kwai','Bridge on the River Kwai','culture',14.0408,99.5036,0,'Kanchanaburi','Open all day','Arrive on the 07:45 train from Thonburi (at the bridge ~10:37).','WWII Death Railway bridge you can walk across. Light and sound show during River Kwai Bridge Week.',OUTSIDE),
+  P('war-cemetery','Kanchanaburi War Cemetery','culture',14.0325,99.5255,0,'Kanchanaburi','~08:00–17:00','Midday is hot; there is shade at the edges.','Calm Allied cemetery for railway prisoners of war, next to Kanchanaburi station. The Thailand–Burma Railway Centre museum is next door.',OUTSIDE),
+  P('phra-pathom','Phra Pathom Chedi','culture',13.8197,100.0602,60,'Nakhon Pathom','~06:00–18:00','Morning, before the heat on the terraces.','One of the tallest stupas in the world, a short walk from Nakhon Pathom station.',OUTSIDE),
+  P('sanam-chandra','Sanam Chandra Palace','culture',13.8130,100.0420,50,'Nakhon Pathom','~09:00–16:00 (verify)','Late morning; shady grounds.','Early 20th-century royal palace mixing Thai and English Tudor styles, with a statue of King Rama VI\'s dog.',OUTSIDE),
+  P('wat-sothon','Wat Sothon Wararam','culture',13.6787,101.0791,0,'Chachoengsao','Daytime','Weekdays; weekends are packed with pilgrims.','Huge white temple of the much-loved Luang Por Sothon Buddha image. Yellow songthaew from the station.',OUTSIDE),
+  P('ban-mai','Ban Mai 100-Year Market','food',13.6939,101.0848,150,'Chachoengsao','Daytime, liveliest weekends (verify)','Lunch, on the riverside decks.','Wooden riverside market on the Bang Pakong with old shophouses, noodles and Chinese-Thai snacks.',OUTSIDE),
+  P('sam-yot','Phra Prang Sam Yot','culture',14.8027,100.6146,50,'Lopburi','~08:00–18:00','Morning. Keep bags zipped; monkeys grab.','Three-towered Khmer shrine run by a troop of monkeys, next to Lopburi station.',OUTSIDE),
+  P('narai-palace','King Narai\'s Palace (Lopburi Museum)','culture',14.7995,100.6105,150,'Lopburi','~08:30–16:00, museum Wed–Sun (verify)','Around midday, indoors out of the sun.','17th-century palace ruins with a museum in King Mongkut\'s royal residence.',OUTSIDE),
+  // Added districts (east, north, west) and more activities
+  P('kwan-riam','Kwan-Riam Floating Market','market',13.8030,100.6960,0,'Min Buri','Sat, Sun & holidays 06:00–18:00','Arrive by 07:30 for monks collecting alms by boat.','Canal market on Khlong Saen Saep with boat restaurants, Isan and dessert stalls, a 40-baht canal boat trip and a small petting zoo. Taxi from The Mall Bangkapi pier.','Min Buri','floating market canal'),
+  P('hua-takhe','Hua Takhe Old Market','market',13.7235,100.7605,0,'Lat Krabang','Daytime, liveliest weekends (verify)','Weekend late morning; stay for lunch by the canal.','Old wooden shophouses on a canal near the KMITL art school: murals, craft stalls, cats, cafés and kayak rental. Airport Rail Link to Lat Krabang, then a red songthaew.','Lat Krabang','kayak cats art old market canal'),
+  P('prasart-museum','Prasart Museum','culture',13.7340,100.6640,500,'Krungthep Kreetha','Tue–Sun 09:00–14:00, by appointment only','Book ahead; minimum two people (solo pays 1,000 baht).','One collector\'s garden of replica Thai palaces, a teak library and a Khmer-style chapel, filled with antiques. Private guided tour, no photos inside. Pin approximate.','Bang Kapi','private museum antiques'),
+  P('kunawong','Kunawong House Museum','art',13.7910,100.6000,450,'Lat Phrao 54','Sundays only, 09:30–18:00','Sunday morning; MRT Yellow Line Chokchai 4.','Private home museum of more than 1,000 artworks, from Ayutthaya pieces and puppets to contemporary painting and sculpture, in rooms and gardens.','Wang Thonglang','sermkhun art collector house'),
+  P('sculpture-center','Bangkok Sculpture Center','art',13.8330,100.6420,0,'Nuanchan','Tue–Sat 10:00–16:00 (call ahead)','Weekday; ring before going, it is a private collection.','Private museum of modern Thai sculpture from the 1900s on, in a quiet compound. Pin approximate.','Bueng Kum','sculpture museum'),
+  P('seri-thai-park','Seri Thai Park','nature',13.7945,100.6530,0,'Bueng Kum','~05:00–21:00','Late afternoon around the lake.','Big local park with a lake, cycling paths and fishing piers; very few tourists.','Bueng Kum','park lake'),
+  P('wat-ratchaorot','Wat Ratcha Orasaram','culture',13.7015,100.4665,0,'Chom Thong','~08:00–17:00','Afternoon, then on to Talat Phlu for dinner.','Rama III\'s own temple, built in a striking Chinese style with porcelain-decorated halls and stone guardians.','Chom Thong','wat ratchaorot chinese temple rama iii'),
+  P('changchui','ChangChui Creative Park','market',13.7838,100.4893,0,'Sirindhorn Rd','Park ~11:00–23:00; night market Tue–Sun from 16:00','After 17:00 when the lights come on.','Creative park built from recycled materials around a full-size airliner: vintage, art, bars and a night market. Free entry. MRT Sirindhorn then a short taxi.','Bang Phlat','chang chui airplane plane market creative'),
+  P('sanam-luang-2','Thonburi Market (Sanam Luang 2)','market',13.7463,100.3549,0,'Thawi Watthana','~09:00–18:00, busiest weekends','Weekend morning, before the heat.','Huge local market of plants, food, home goods, crafts and a pet zone. Taxi only.','Thawi Watthana','plants garden market'),
+  P('dhammamongkol','Wat Dhammamongkol','culture',13.6905,100.6080,0,'Sukhumvit 101','~08:00–17:00','Late morning; take the lift to the top of the chedi.','Temple with a 14-storey chedi and a Buddha carved from a single huge block of jade. BTS Punnawithi.','Phra Khanong','jade buddha'),
+  P('jt-outlet','Jim Thompson Factory Outlet','market',13.6950,100.6040,0,'Sukhumvit 93','~09:00–18:00','Weekday; the fabric floors upstairs are the best part.','Several floors of Thai silk, cushions and end-of-line fabrics at outlet prices. BTS Bang Chak.','Phra Khanong','silk fabric'),
+  P('wat-pariwat','Wat Pariwat (the "David Beckham temple")','culture',13.6880,100.5330,0,'Rama 3','~08:00–17:00','Bring binoculars or zoom: the fun details are small and high up.','Old temple restored with playful sculptures among the traditional ones: David Beckham, Pikachu, superheroes. Taxi from BTS Chong Nonsi.','Yan Nawa','beckham quirky temple'),
+  P('lumpinee-stadium','Lumpinee Boxing Stadium','workshop',13.8660,100.6040,1500,'Ram Inthra','Fight nights several times a week (check schedule)','Cheaper stands are fine; arrive for the main card around 20:00.','The other great Muay Thai stadium, in a modern arena since 2014.','Bang Khen','muay thai boxing fight'),
+  P('sathira','Sathira Dhammasathan','culture',13.8420,100.6170,0,'Watcharaphon','Daytime; retreats need booking','Weekday morning for quiet; dress in white or modest clothes.','Peaceful Buddhist meditation centre with lotus ponds and a striking white meditation hall.','Bang Khen','meditation retreat'),
+  P('siam-amazing-park','Siam Amazing Park','workshop',13.8045,100.6870,900,'Seri Thai Rd','~10:00–18:00 (verify)','Weekdays, when queues are short.','Old-school amusement and water park; a fun day off from temples. Price approximate.','Khan Na Yao','theme park water park rides'),
+  P('safari-world','Safari World','workshop',13.8620,100.7060,1500,'Ram Inthra km 9','~09:00–17:00 (verify)','Weekday, arrive at opening for the drive-through safari.','Drive-through safari plus a marine park with shows. Popular with families; price approximate.','Khlong Sam Wa','zoo animals'),
+  P('huamum','Talat Huamum night market','market',13.8350,100.6190,200,'Kaset-Nawamin','Evenings Thu–Sun (verify)','From 18:00; come hungry.','Big local night market of clothes, gadgets and street food, with seafood restaurants. Pin approximate.','Lat Phrao','hua mum night market'),
+  P('thonburirom','Thonburirom Park','nature',13.6460,100.4930,0,'Pracha Uthit','~05:00–21:00','Early evening, with locals jogging round the lake.','Large neighbourhood park with lakes and shaded paths in the far south of Thonburi.','Thung Khru','park'),
+  P('sala-chalermkrung','Sala Chalermkrung Royal Theatre','workshop',13.7444,100.4995,1000,'Pahurat','Khon dance shows on set evenings (verify dates)','Book a seat for a Khon masked-dance night; check the programme first.','Art Deco theatre from 1933 that stages Khon, Thailand\'s classical masked dance drama, with English surtitles.','Phra Nakhon','khon dance theatre show'),
+  P('express-boat','Chao Phraya Express boat ride','view',13.7190,100.5130,20,'Sathorn pier','Daytime, roughly 06:00–19:00','Late afternoon going north for the light on Wat Arun.','The cheapest river tour: the orange-flag boat from Sathorn pier up past Wat Arun to Phra Arthit, for a few dozen baht.','Sathon','river boat ferry orange flag'),
+  P('house-samyan','House Samyan cinema','art',13.7330,100.5285,200,'Samyan Mitrtown','Daily screenings','A rainy evening.','Independent arthouse cinema showing Thai and international films with English subtitles.','Pathum Wan','movies film arthouse'),
+  P('song-wat','Song Wat Road','art',13.7398,100.5048,0,'Chinatown','Shops ~10:00–18:00; cafés into the evening','Late afternoon, then dinner in Yaowarat.','Old warehouse street of spice traders turned into galleries, concept stores and cafés, with street art along the way.','Samphanthawong','street art cafes creative'),
+  P('tuptim-shrine','Chao Mae Tuptim Shrine','culture',13.7445,100.5480,0,'Wireless Rd','Daytime','Combine with Nai Lert Park on Wireless Road.','Small shrine to a fertility goddess, surrounded by hundreds of wooden phalluses left as offerings, hidden behind a hotel car park.','Pathum Wan','phallic shrine quirky'),
+  P('tep-bar','Tep Bar','night',13.7417,100.5088,350,'Chinatown (Soi Nana)','Evenings, live Thai music most nights (verify)','After dinner in Yaowarat, from about 20:00.','Tiny bar with traditional Thai music played live and Thai-herb cocktails.','Pom Prap Sattru Phai','live music cocktails'),
+  P('studio-lam','Studio Lam','night',13.7370,100.5650,300,'Sukhumvit 51','Evenings (verify)','Weekend nights for the DJs.','Bar devoted to Isan molam and Thai funk, with records and live sets.','Watthana','molam music dj'),
+  P('saxophone','Saxophone Pub','night',13.7650,100.5385,250,'Victory Monument','Nightly live music from ~19:30','Arrive by 21:00 for a seat near the stage.','Bangkok\'s long-running jazz and blues pub with live bands every night.','Ratchathewi','jazz blues live music'),
+  P('octave','Octave Rooftop Bar','view',13.7240,100.5850,400,'Thong Lo','~17:00–02:00','Sunset, from about 17:30.','360° rooftop bar on top of the Marriott Sukhumvit, far cheaper than the SkyWalk for a skyline view (price = one drink).','Watthana','rooftop bar sunset skyline'),
+  P('co-van-kessel','Co van Kessel bike tour','workshop',13.7300,100.5135,1300,'River City','Morning, afternoon and night tours','Book a day ahead; the morning tour is coolest.','Guided bike tours through Chinatown back alleys and Thonburi canals, with a boat crossing. Price approximate.','Bang Rak','cycling bike tour'),
+];
+
+/* Day plans. days = weekdays the plan works (0=Sun…6=Sat). Each step: place id, start time, minutes, how to get there, tip */
+const S = (id,t,m,go,tip)=>({id,t,m,go,tip});
+const PLANS = [
+  {id:'rattan',title:'Old City temples, the early version',kind:'Half day',days:'0123456',hrs:'08:30–14:00',cost:'~฿1,000 + food',
+   why:'Three headline temples ordered to beat the heat and the tour buses. From 29 Oct, Wat Pho and Wat Arun also show Art Biennale works.',
+   steps:[S('grand-palace','08:30',100,'MRT Sanam Chai or Chao Phraya boat to Tha Chang','Arrive at opening. Cover knees and shoulders.'),
+          S('wat-pho','10:30',75,'10-minute walk south','Reclining Buddha first, then the quieter courtyards. Massage on site.'),
+          S('pak-khlong','12:00',30,'10-minute walk','Quick look at the flower stalls and a cold drink.'),
+          S('wat-arun','12:45',60,'Walk back to Tha Tien, ferry across','Midday sun is fierce; bring water.')]},
+  {id:'old-town-walk',title:'Old Town: Giant Swing, monk bowls and an iron castle',kind:'Half day',days:'123456',hrs:'09:00–14:00',cost:'~฿600 incl. lunch',
+   why:'A compact walking loop through the old town\'s craft lanes and quieter temples, ending with a royal-recipe lunch. Krua Apsorn is closed Sundays.',
+   steps:[S('wat-suthat','09:00',60,'MRT Sam Yot, 10-minute walk','Murals inside; the Giant Swing is out front.'),
+          S('ban-bat','10:15',45,'15-minute walk east','Follow the hammering. Ask before photographing.'),
+          S('loha-prasat','11:15',45,'10-minute walk','Climb to the top terrace.'),
+          S('krua-apsorn','12:15',60,'5-minute walk','Crab omelette and yellow-chilli crab.'),
+          S('mont-nomsod','13:30',30,'5-minute walk','Toast with custard for dessert.')]},
+  {id:'old-town-food',title:'Golden Mount sunset and Old Town dinner',kind:'Evening',days:'0123456',hrs:'16:00–21:00',cost:'~฿300–1,800',
+   why:'Golden Mount at golden hour, then the two best-known plates a short walk apart. Thip Samai is closed Tuesdays.',
+   steps:[S('wat-saket','16:00',75,'Khlong Saen Saep boat to Phan Fa pier or taxi','Be at the top by about 17:30 for sunset.'),
+          S('thipsamai','18:00',60,'10-minute walk','Arrive before 18:30 to skip the worst of the queue.'),
+          S('jayfai','19:30',90,'3-minute walk','Optional splurge. Check opening days and queue policy beforehand.')]},
+  {id:'chinatown',title:'Chinatown art and street food',kind:'Afternoon–evening',days:'03456',hrs:'14:00–21:00',cost:'~฿500',
+   why:'Golden Buddha and a raw art space while it is light, the riverside at sunset, then Yaowarat when the stalls fire up. Kunsthalle is closed Mon–Tue.',
+   steps:[S('wat-traimit','14:00',40,'MRT Hua Lamphong','Short and quiet before 15:00.'),
+          S('kunsthalle','14:50',60,'10-minute walk','Opens around 14:00; check the current show.'),
+          S('wat-mangkon','16:00',30,'10-minute walk','Incense and prayer; MRT Wat Mangkon is right here.'),
+          S('talat-noi','16:45',75,'15-minute walk south','Alleys, So Heng Tai, coffee in an old shophouse.'),
+          S('river-city','18:00',30,'10-minute walk along Charoen Krung','Sunset from the pier.'),
+          S('yaowarat','18:45',120,'Taxi or walk back up','Start at the main road and follow the queues.')]},
+  {id:'bang-rak',title:'Bang Rak faiths and old Charoen Krung',kind:'Half day',days:'03456',hrs:'09:00–13:30',cost:'~฿200',
+   why:'Hindu, Christian and old-Bangkok family life in one walk along the oldest paved road, ending with roast duck. Bangkokian Museum opens Wed–Sun.',
+   steps:[S('sri-mariamman','09:00',30,'BTS Surasak, 10-minute walk','Morning puja; shoes off.'),
+          S('bangkokian-museum','10:00',45,'Taxi down to Charoen Krung','Volunteers explain the house if you ask.'),
+          S('warehouse30','11:00',60,'10-minute walk south','Design shops open around 11:00.'),
+          S('assumption','12:15',20,'5-minute walk','Quiet courtyard behind the Oriental.'),
+          S('prachak','12:45',45,'5-minute walk','Roast duck on rice.')]},
+  {id:'thonburi',title:'Thonburi canals, temples and riverside',kind:'Day',days:'0124356',hrs:'10:00–18:30',cost:'~฿300 + food',
+   why:'West to east along the quieter bank: artist\'s house on a canal, Wat Arun, the old Portuguese quarter, then sunset at the Jam Factory.',
+   steps:[S('baan-silapin','10:00',90,'MRT Bang Phai, then a short taxi','Café on the canal. (Afternoon puppet show: see the Taling Chan plan.)'),
+          S('wat-arun','12:00',60,'Taxi, about 10 minutes','Tours thin out at lunch.'),
+          S('kudeejeen','13:45',45,'Taxi or 20-minute riverside walk','Buy kanom farang at a family bakery.'),
+          S('wat-prayoon','14:45',45,'5-minute walk','Turtle hill and the big white chedi. Biennale works from 29 Oct.'),
+          S('lhong1919','16:00',45,'Short taxi along Charoen Nakhon Rd','Shrine and river views.'),
+          S('jam-factory','17:15',75,'Short taxi','Bookshop, then sunset by the river.')]},
+  {id:'bangkok-noi',title:'Royal barges, the body museum and Wang Lang',kind:'Day',days:'03456',hrs:'09:30–17:30',cost:'~฿600',
+   why:'Thonburi\'s canal-side museums in the morning, market lunch, a ferry over and the National Museum, then sunset at the old fort. Siriraj is closed Tue, the National Museum Mon–Tue.',
+   steps:[S('royal-barges','09:30',60,'Taxi or Grab (no station nearby)','Small; 45–60 minutes is enough.'),
+          S('siriraj','10:45',105,'Taxi, about 10 minutes, or walk 20 minutes','Skip the forensic rooms if you are squeamish.'),
+          S('wang-lang','12:45',45,'Walk through the hospital to the market','Lunch from the stalls.'),
+          S('nat-museum','13:45',120,'Ferry Wang Lang to Tha Chang, 10-minute walk','Last entry around 15:30.'),
+          S('phra-sumen','16:15',60,'15-minute walk north along the river','Sunset with the Rama VIII bridge.')]},
+  {id:'riverside-phlu',title:'ICONSIAM to Talat Phlu food crawl',kind:'Afternoon–evening',days:'0123456',hrs:'15:00–20:30',cost:'~฿400',
+   why:'Regional Thai snacks under one roof, the river at sunset, then the old Thonburi market when its evening stalls fire up.',
+   steps:[S('iconsiam','15:00',150,'Free shuttle boat from Sathorn pier, or Gold Line','SookSiam floor for snacks; riverside terrace at sunset.'),
+          S('talat-phlu','18:00',120,'Taxi, about 15 minutes','Crispy pork, kway jap and khanom buang.')]},
+  {id:'siam-art',title:'Art, design and a sunset sky',kind:'Day',days:'023456',hrs:'10:00–19:00',cost:'~฿1,350',
+   why:'Quiet galleries first, shrine dancers mid-afternoon, then a skyline at golden hour. BACC is closed Mon.',
+   steps:[S('jim-thompson','10:00',75,'BTS National Stadium','First tour has the smallest groups.'),
+          S('bacc','11:30',90,'5-minute walk','Free. Biennale works from 29 Oct. Lunch in the building.'),
+          S('siam-discovery','13:30',90,'Skywalk','Thai designer shops and atrium pop-ups.'),
+          S('erawan','15:15',20,'Skywalk towards Chit Lom','Dance offerings; short visit.'),
+          S('mahanakhon','16:45',90,'BTS Chit Lom to Chong Nonsi','Book the sunset slot and check the sky first.')]},
+  {id:'pathumwan',title:'Snakes, a flood park and Lumphini',kind:'Half day',days:'0123456',hrs:'10:30–18:30',cost:'~฿200',
+   why:'The snake show in the morning, a lunch break at Samyan, the green-roof park, then Lumphini and a gallery as it cools.',
+   steps:[S('snake-farm','10:30',90,'MRT Sam Yan or Silom','The 11:00 show runs every day.'),
+          S('chula-park','13:30',45,'15-minute walk (lunch at Samyan Mitrtown on the way)','Walk up the sloped roof.'),
+          S('lumphini','16:00',60,'MRT Sam Yan to Lumphini','Lizards by the lake.'),
+          S('citycity','17:15',60,'10-minute walk down Sathorn Soi 1','Check the show is on (Wed–Sun).')]},
+  {id:'east-art',title:'Dib Bangkok and the green east side',kind:'Day',days:'01456',hrs:'10:00–18:00',cost:'~฿900',
+   why:'The new contemporary art museum at opening, beef noodles nearby, then the wetland skywalk in the cooler late afternoon. Dib is closed Tue–Wed.',
+   steps:[S('dib','10:00',150,'BTS Ekkamai, then taxi or walk down Sukhumvit 40','Start with the top floor and work down.'),
+          S('wattana-panich','13:00',45,'Short taxi up Ekkamai Rd','Beef noodle soup; fast turnover.'),
+          S('benjakitti','15:30',90,'BTS Ekkamai to Asok, MRT to Queen Sirikit','Walk the skywalk loop as the light softens.'),
+          S('lumphini','17:15',45,'Walk via the green bridge','On Sundays in Jan–Feb, stay for the free concert.')]},
+  {id:'weekend-north',title:'Chatuchak, Thai modern art and a night market',kind:'Weekend day',days:'06',hrs:'08:00–21:00',cost:'~฿800',
+   why:'A park ride and the weekend market in the cool morning, the best fresh market for lunch, a calm museum for the hot hours, then a night market.',
+   steps:[S('rotfai-park','08:00',60,'MRT Kamphaeng Phet or Chatuchak Park','Rent a bike for a loop.'),
+          S('chatuchak','09:15',135,'Walk south','Get a map at the clock tower. Leave by noon.'),
+          S('ortorkor','11:45',60,'Cross Kamphaeng Phet Rd','Fruit, curries over rice, coconut ice cream.'),
+          S('moca','14:00',150,'Taxi, about 15 minutes','Five floors; allow time for the top.'),
+          S('rotfai-ratchada','18:30',120,'Taxi to MRT Thailand Cultural Centre','Check it is open that night.')]},
+  {id:'ari-palace',title:'Ari brunch, a hidden palace and Suan Pakkad',kind:'Weekend half day',days:'06',hrs:'08:00–15:00',cost:'~฿500',
+   why:'Café breakfast in leafy Ari, the weekend-only palace tour, boat noodles, then teak houses and lacquer art.',
+   steps:[S('ari','08:00',75,'BTS Ari','Breakfast in the sois off Phahon Yothin 7.'),
+          S('phaya-thai-palace','09:15',135,'BTS Ari to Victory Monument, 10-minute walk','Be there 15 minutes before the 09:30 tour. Coffee at Café Narasingh.'),
+          S('boatnoodles','12:00',45,'10-minute walk','Order several small bowls.'),
+          S('suan-pakkad','13:15',90,'BTS Victory Monument to Phaya Thai','Do not miss the Lacquer Pavilion.')]},
+  {id:'taling-chan',title:'Two floating markets and a puppet show',kind:'Weekend day',days:'06',hrs:'09:00–15:00',cost:'~฿400',
+   why:'The two local weekend floating markets in the morning, then the Artist\'s House in time for the 14:00 puppet show.',
+   steps:[S('khlong-lat-mayom','09:00',120,'Taxi or Grab (no train nearby)','Boat noodles and a canal boat ride.'),
+          S('taling-chan-fm','11:30',90,'Taxi, about 15 minutes','Grilled prawns for lunch on the pontoon.'),
+          S('baan-silapin','13:30',90,'Taxi, about 20 minutes','Puppet show around 14:00.')]},
+  {id:'green',title:'Bang Krachao bike loop',kind:'Half day',days:'0123456',hrs:'08:00–13:00',cost:'~฿300',
+   why:'Cheapest escape: a jungle island inside a river bend, easy to cycle in two hours. Weekends add the floating market.',
+   steps:[S('bangkrachao','08:30',240,'MRT Khlong Toei, taxi to Khlong Toei pier, then cross-river boat','Rent bikes by the pier; take mosquito spray and water.')]},
+  {id:'rama9',title:'Rama IX Park and Mae Nak\'s shrine',kind:'Half day',days:'0123456',hrs:'07:30–12:30',cost:'~฿200',
+   why:'Bangkok\'s biggest park in the cool morning, then the shrine to the city\'s favourite ghost on the way back.',
+   steps:[S('rama9-park','07:30',180,'BTS Udom Suk, then taxi','Hire a bike; the botanical garden is at the far end.'),
+          S('mae-nak','11:15',45,'Taxi, about 20 minutes','Walk the canal side of Wat Mahabut.')]},
+  {id:'night-markets',title:'Night market and a midnight shrine',kind:'Evening',days:'0456',hrs:'18:00–22:30',cost:'~฿400',
+   why:'Two local evening scenes on the MRT Blue line, a few stops apart.',
+   steps:[S('rotfai-ratchada','18:00',120,'MRT Thailand Cultural Centre','Check it is open that night.'),
+          S('huai-khwang','20:30',90,'MRT one stop to Huai Khwang','Street food, then the Ganesha shrine.')]},
+  {id:'coast',title:'Bangkok\'s only coastline',kind:'Half day',days:'0123456',hrs:'14:00–19:00',cost:'~฿600 taxi',
+   why:'Mangroves, sea breeze and a sunset over the Gulf, without leaving the city limits.',
+   steps:[S('bang-khun-thian','15:00',150,'Taxi or Grab (about 1 hour from the centre)','Ask the driver to wait or book a return ride; there is little transport.')]},
+  {id:'east-canals',title:'Eastern canals: floating market and old Hua Takhe',kind:'Weekend day',days:'06',hrs:'07:30–15:00',cost:'~฿600 incl. taxis',
+   why:'The canal side of Bangkok most visitors never see: monks on boats at Kwan-Riam, then the wooden shophouses, cats and kayaks of Hua Takhe.',
+   steps:[S('kwan-riam','07:30',180,'Saen Saep canal boat to The Mall Bangkapi pier, then taxi (~80 baht)','Alms round about 07:30–08:00, then a 40-baht boat trip.'),
+          S('hua-takhe','11:30',180,'Taxi, about 25 minutes','Lunch by the canal; rent a kayak if it is not too hot.')]},
+  {id:'kunawong-sunday',title:'Sunday art house, lake park and night market',kind:'Sunday',days:'0',hrs:'10:00–20:00',cost:'~฿800',
+   why:'Kunawong House only opens on Sundays; pair it with a quiet park and a big local night market in the north-east.',
+   steps:[S('kunawong','10:00',150,'MRT Yellow Line to Chokchai 4, 5-minute walk','Gardens and puppets; allow time for the upstairs rooms.'),
+          S('seri-thai-park','14:30',75,'Taxi, about 15 minutes','Rest by the lake in the shade.'),
+          S('huamum','17:30',150,'Taxi, about 20 minutes','Check it runs on Sunday; seafood dinner.')]},
+  {id:'rama3-river',title:'Quirky temples and the river by express boat',kind:'Half day',days:'0123456',hrs:'09:30–13:30',cost:'~฿200',
+   why:'Two unusual temples south of Sathorn, then the cheapest river tour north to the old town.',
+   steps:[S('wat-pariwat','09:30',45,'BTS Chong Nonsi, then taxi down Rama 3','Look for Beckham under the main hall\'s roof.'),
+          S('wat-yannawa','10:45',30,'Taxi, about 10 minutes','The stone junk is behind the main hall.'),
+          S('express-boat','11:30',60,'Walk to Sathorn pier','Orange flag boat north; get off at Tha Chang or Phra Arthit.')]},
+  {id:'phlu-temple',title:'Rama III\'s Chinese temple and Talat Phlu dinner',kind:'Afternoon–evening',days:'0123456',hrs:'15:00–20:00',cost:'~฿300',
+   why:'A rarely visited royal temple in Chom Thong, then one of Thonburi\'s best food markets.',
+   steps:[S('wat-ratchaorot','15:00',75,'Taxi from BTS Wutthakat','Stone Chinese guardians and porcelain gables.'),
+          S('talat-phlu','17:00',150,'Taxi, about 10 minutes','Crispy pork, kway jap and khanom buang.')]},
+  {id:'changchui-evening',title:'Riverside fort sunset and ChangChui night',kind:'Evening',days:'023456',hrs:'16:30–22:00',cost:'~฿500',
+   why:'Sunset at the old fort under the Rama VIII bridge, then across the river to the airplane creative park when its night market opens (Tue–Sun).',
+   steps:[S('phra-sumen','16:30',60,'Boat to Phra Arthit pier','Sunset with the bridge.'),
+          S('changchui','18:00',180,'Taxi across the Rama VIII bridge, about 15 minutes','Night market, bars and the airliner lit up.')]},
+  {id:'chinatown-music',title:'Song Wat, Yaowarat and live Thai music',kind:'Evening',days:'0123456',hrs:'16:00–23:00',cost:'~฿700',
+   why:'Galleries and cafés on Song Wat while it is light, street food at dusk, then traditional Thai music in a tiny bar.',
+   steps:[S('song-wat','16:00',90,'MRT Wat Mangkon, 10-minute walk','Street art and concept stores.'),
+          S('yaowarat','18:00',120,'10-minute walk','Graze from stall to stall.'),
+          S('tep-bar','20:30',120,'10-minute walk to Soi Nana','Check the music schedule first.')]},
+  {id:'kret',title:'Koh Kret pottery island',kind:'Half day',days:'06',hrs:'09:00–14:00',cost:'~฿500',
+   why:'Mon pottery, snacks and a bike loop on a weekend morning.',
+   steps:[S('koh-kret','09:30',240,'MRT Purple line towards Nonthaburi, then taxi to Pak Kret pier','Cross by small boat. Try the pottery workshop and the island loop.')]},
+  {id:'ancient',title:'Erawan Museum and the Ancient City',kind:'Day trip',days:'12345',hrs:'09:30–16:30',cost:'~฿1,300',
+   why:'Two big, quirky sights south of the city on the BTS, easiest on a weekday.',
+   steps:[S('erawan-museum','09:30',90,'BTS Chang Erawan','Indoor and cool; start here.'),
+          S('ancient-city','12:00',240,'BTS to Kheha, then a short taxi','Rent a bike or golf cart.')]},
+  {id:'ayutthaya',title:'Ayutthaya by train',kind:'Full day trip',days:'0123456',hrs:'07:30–19:30',cost:'~฿600–900',
+   why:'Ruins in the cool morning, a long lunch break, and sunset at the riverside temple.',
+   steps:[S('ayutthaya-mahathat','09:30',60,'Train from Krung Thep Aphiwat (≈90 min), then tuk-tuk','Check return trains on arrival.'),
+          S('ayutthaya-sisanphet','11:00',60,'10-minute tuk-tuk or bike','Hire a tuk-tuk by the hour or rent a bike.'),
+          S('ayutthaya-chaiwat','16:15',90,'15-minute tuk-tuk','Rest through the midday heat. Stay for sunset.')]},
+  {id:'maeklong-amphawa',title:'Railway market and floating market',kind:'Day trip',days:'056',hrs:'09:00–21:00',cost:'~฿700',
+   why:'Catch the train squeezing through the market, then the canal market as it wakes up. Amphawa only runs Fri–Sun.',
+   steps:[S('maeklong','10:30',90,'Minivan from Bangkok (≈90 min; check the current departure point)','Ask at the station for the next train time.'),
+          S('amphawa','15:30',180,'Songthaew or taxi (≈20 min)','Seafood dinner and a firefly boat. Check the last van back.')]},
+  {id:'kanchanaburi',title:'Kanchanaburi and the River Kwai',kind:'Full day trip',days:'0123456',hrs:'07:45–17:40',cost:'~฿300',
+   why:'The slow train west to the Death Railway bridge, the war cemetery, and the afternoon train back. Foreigners pay 100 baht each way.',
+   steps:[S('river-kwai','10:40',90,'Train 257 from Thonburi station 07:45, get off at River Kwai Bridge (~10:37)','Walk the bridge before the tour buses.'),
+          S('war-cemetery','12:30',90,'Songthaew or tuk-tuk, about 10 minutes','Railway Centre museum next door. Train 258 leaves Kanchanaburi station ~14:43, back ~17:40.')]},
+  {id:'nakhon-pathom',title:'Nakhon Pathom: giant stupa and a Tudor palace',kind:'Half-day trip',days:'0123456',hrs:'07:45–14:00',cost:'~฿300',
+   why:'The same morning train as Kanchanaburi, but only an hour out: a huge stupa and a quirky palace.',
+   steps:[S('phra-pathom','09:00',90,'Morning train from Thonburi (about 1 h; check times) or bus','Walk the terraces before it gets hot.'),
+          S('sanam-chandra','11:00',90,'Tuk-tuk, about 10 minutes','Shady grounds; look for the dog statue.')]},
+  {id:'chachoengsao',title:'Chachoengsao: temple and 100-year market',kind:'Day trip',days:'12345',hrs:'10:30–17:00',cost:'~฿300',
+   why:'A cheap train east, the hugely popular Sothon temple on a quiet weekday, then lunch at the riverside wooden market.',
+   steps:[S('wat-sothon','12:00',60,'Train 367 from Makkasan ~10:30 (~1 h 10), then yellow songthaew','Weekdays are calmer.'),
+          S('ban-mai','13:30',105,'Songthaew or tuk-tuk (~300 baht)','Return train ~15:34; check at the station.')]},
+  {id:'lopburi',title:'Lopburi: monkeys and King Narai',kind:'Full day trip',days:'03456',hrs:'08:30–18:00',cost:'~฿600',
+   why:'Khmer towers full of monkeys, then a palace museum. Check current trains: most now leave from Krung Thep Aphiwat.',
+   steps:[S('sam-yot','10:45',45,'Train ~2 h from Bangkok, then walk from Lopburi station','Hide sunglasses and snacks.'),
+          S('narai-palace','12:00',120,'10-minute walk','Museum is Wed–Sun. Afternoon trains back around 14:50 and 18:00 (verify).')]},
+];
+
+/* Suggested plan for each weekend until you leave. You can change any weekend in the app; your choice is saved. */
+const WEEKENDS = [
+  {sat:'2026-10-17',plan:'chinatown',note:'Last days of the Vegetarian Festival in Yaowarat (to 18 Oct).'},
+  {sat:'2026-10-24',plan:'weekend-north',note:'Chulalongkorn Day was Friday; markets are busy.'},
+  {sat:'2026-10-31',plan:'rattan',note:'Bangkok Art Biennale opened 29 Oct: look for works at Wat Pho and Wat Arun.'},
+  {sat:'2026-11-07',plan:'ari-palace',note:'Phaya Thai Palace tours run only at weekends.'},
+  {sat:'2026-11-14',plan:'thonburi',note:'Vijit Chao Phraya light festival starts 13 Nov: stay by the river after dark.'},
+  {sat:'2026-11-21',plan:'old-town-food',note:'Wat Saket temple fair is around now (verify); Loy Krathong is Tue 24 Nov.'},
+  {sat:'2026-11-28',plan:'kanchanaburi',note:'River Kwai Bridge Week (27 Nov–7 Dec): consider staying overnight for the light show.'},
+  {sat:'2026-12-05',plan:'taling-chan',note:'Father\'s Day (Sat): Ratchadamnoen is lit up in the evening.'},
+  {sat:'2026-12-12',plan:'maeklong-amphawa',note:'Last weekend of Vijit Chao Phraya (to 13 Dec).'},
+  {sat:'2026-12-19',plan:'ayutthaya',note:'Cool-season weather is ideal for ruins.'},
+  {sat:'2026-12-26',plan:'green',note:'Quiet holiday week; Bang Krachao is calm.'},
+  {sat:'2027-01-02',plan:'siam-art',note:'New Year weekend: Biennale works at BACC and the malls.'},
+  {sat:'2027-01-09',plan:'bangkok-noi',note:'Children\'s Day (Sat): museums can be busy with families.'},
+  {sat:'2027-01-16',plan:'kret',note:'Weekend morning is best on the island.'},
+  {sat:'2027-01-23',plan:'lopburi',note:'Narai Palace museum is open at weekends.'},
+  {sat:'2027-01-30',plan:'east-art',note:'Do it on Sunday to end with the free Concert in the Park at Lumphini.'},
+  {sat:'2027-02-06',plan:'chinatown',note:'Chinese New Year (6–7 Feb): Yaowarat is packed and festive. Go early.'},
+  {sat:'2027-02-13',plan:'bang-rak',note:'Quiet Charoen Krung before Design Week takes over.'},
+  {sat:'2027-02-20',plan:'thonburi',note:'Bangkok Design Week (18–28 Feb) runs in Charoen Krung and Talat Noi: add an evening there.'},
+];
+
+/* Events. date ISO (start,end). approx:true = verify dates. no fixed dates => recurring */
+const E = (title,start,end,place,lat,lng,cost,note,approx=false,recurring=false)=>({title,start,end,place,lat,lng,cost,note,approx,recurring});
+const EVENTS = [
+  E('Vegetarian (Jay) Festival','2026-10-10','2026-10-18','Yaowarat, Chinatown',13.7400,100.5090,'Free','Yellow-flag vegan food stalls all along Yaowarat. Evenings are best.',true),
+  E('Chulalongkorn Day','2026-10-23','2026-10-23','Royal Plaza, Dusit',13.7667,100.5143,'Free','Public holiday. Crowds bring flowers to the King Rama V statue.'),
+  E('Ok Phansa (end of Buddhist Lent)','2026-10-26','2026-10-26','Local temples',13.7465,100.4927,'Free','Merit-making at temples in the morning. Alcohol sales may be restricted.',true),
+  E('Bangkok Art Biennale 2026 "Angels & Mara"','2026-10-29','2027-02-28','Wat Arun, Wat Pho, Wat Prayoon, BACC, Museum Siam, National Museum, One Bangkok and more',13.7468,100.5301,'Mostly free','Citywide contemporary art across temples, museums and malls. Temple venues charge their usual entry. Check bkkartbiennale.com for hours.'),
+  E('Vijit Chao Phraya light festival','2026-11-13','2026-12-13','Both banks of the Chao Phraya',13.7300,100.5110,'Free','Light shows on riverside temples and buildings each evening. Drone and fireworks dates still to be announced.'),
+  E('Wat Saket temple fair','2026-11-16','2026-11-25','Wat Saket (Golden Mount)',13.7536,100.5067,'Free','Old-style fair with food, games and the red-cloth procession up the mount around Loy Krathong.',true),
+  E('Loy Krathong','2026-11-24','2026-11-24','Riverside, Benjakitti, Lumphini',13.7240,100.5580,'Free','Full-moon night of floating krathongs. The river is packed; park lakes are calmer.'),
+  E('River Kwai Bridge Week','2026-11-27','2026-12-07','Bridge on the River Kwai, Kanchanaburi',14.0408,99.5036,'Free (show seats paid)','Light and sound show at the bridge plus a big night fair. Day trip or overnight.'),
+  E('Lopburi Monkey Buffet','2026-11-29','2026-11-29','Phra Prang Sam Yot, Lopburi',14.8027,100.6146,'Free','Feast laid out for the temple monkeys. Train from Bangkok, about 2–3 h.'),
+  E('Father\'s Day (King Rama IX\'s birthday)','2026-12-05','2026-12-05','Sanam Luang / Ratchadamnoen',13.7563,100.4930,'Free','Public holiday; lights along Ratchadamnoen Avenue.'),
+  E('Constitution Day','2026-12-10','2026-12-10','Democracy Monument',13.7567,100.5018,'Free','Public holiday. Some offices closed.'),
+  E('Red Cross Fair','2026-12-10','2026-12-20','Usually Lumphini Park area',13.7314,100.5418,'Small entry fee','Big charity fair with food stalls and games. Location and dates change; check before going.',true),
+  E('New Year countdown','2026-12-31','2027-01-01','CentralWorld (Ratchaprasong) or ICONSIAM (river)',13.7467,100.5398,'Free','Concert and countdown at CentralWorld; fireworks over the river at ICONSIAM. Go very early.'),
+  E('Children\'s Day','2027-01-09','2027-01-09','Government House, military bases',13.7620,100.5130,'Free','Second Saturday of January. Government House and some army bases open to the public.'),
+  E('Concert in the Park (Sundays)','2027-01-10','2027-02-28','Lumphini Park',13.7314,100.5418,'Free','Free Sunday evening classical concerts by the lake in the cool season. Bring a mat.',true),
+  E('Chinese New Year','2027-02-06','2027-02-07','Yaowarat, Chinatown',13.7400,100.5090,'Free','Lion dances, lanterns, huge crowds. Go early evening.'),
+  E('Bangkok Design Week 2027 "Design to Last"','2027-02-18','2027-02-28','Charoen Krung, Talat Noi and other districts',13.7330,100.5120,'Free','10th edition: installations, pop-ups, talks and open studios. A great last week before you leave.'),
+  E('Makha Bucha Day','2027-02-21','2027-02-21','Wat Benchamabophit / local temples',13.7670,100.5140,'Free','Candlelit walks around temples at night. Alcohol sales restricted.',true),
+  E('Beauty & lifestyle pop-ups','','','Siam Paragon, CentralWorld, Siam Discovery',13.7466,100.5311,'Free entry','Makeup and brand pop-ups rotate every week or two in mall atriums. Watch the malls\' Instagram pages. Usually no booking.',false,true),
+  E('Gallery openings this week','','','Charoen Krung, Chinatown, Sathorn galleries',13.7266,100.5130,'Mostly free','BKK Art Mag publishes a weekly guide to openings and talks (bkkartmag.com). Opening nights are free and open to all.',false,true),
+  E('Weekend creative markets','','','Warehouse 30 / Jam Factory / River City',13.7300,100.5117,'Free entry','Craft and design markets pop up at weekends. Check each venue\'s social pages.',false,true),
+];
+
+/* ---------------------------------------------------------------
+   APP
+---------------------------------------------------------------- */
+const $=s=>document.querySelector(s);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){};sync.push()}};
+
+const state={
+  cats:new Set(Object.keys(CATS)),
+  max:Object.fromEntries(Object.entries(CATS).map(([k,v])=>[k,v.max])),
+  seen:new Set(store.get('seen',[])), fav:new Set(store.get('fav',[])), favOnly:false,
+  q:'', hideSeen:false, sort:'cat', me:null, plan:null, evFilter:'upcoming',
+  userEvents:store.get('userEvents',[]), picking:false, pick:null,
+  pos:store.get('pos',{}), moving:null, tracking:false, follow:false, watchId:null,
+  wkPlan:store.get('wkPlan',{}), wkDone:new Set(store.get('wkDone',[])),
+};
+/* Approximate Google Maps star ratings from memory (not live). Edit any value in its popup, or here. */
+const RATINGS={'grand-palace':4.5,'wat-pho':4.7,'museum-siam':4.4,'nat-museum':4.5,'pak-khlong':4.3,'phra-sumen':4.4,'wat-suthat':4.7,'loha-prasat':4.6,
+ 'thipsamai':4.3,'jayfai':4.3,'krua-apsorn':4.4,'mont-nomsod':4.3,'wat-saket':4.6,'ban-bat':4.4,'rajadamnern':4.5,'kunsthalle':4.5,'benchama':4.7,
+ 'wat-traimit':4.5,'wat-mangkon':4.6,'sampeng':4.1,'talat-noi':4.4,'yaowarat':4.4,'nai-ek':4.3,'river-city':4.4,'warehouse30':4.4,'bangkokian-museum':4.5,
+ 'assumption':4.6,'sri-mariamman':4.6,'prachak':4.3,'mahanakhon':4.5,'silom-cooking':4.9,'bacc':4.5,'jim-thompson':4.5,'erawan':4.5,'siam-discovery':4.5,
+ 'lumphini':4.6,'snake-farm':4.3,'chula-park':4.5,'benjakitti':4.6,'khlong-toei-market':4.2,'benchasiri':4.4,'dib':4.6,'wattana-panich':4.4,'citycity':4.6,
+ 'wat-yannawa':4.5,'asiatique':4.3,'wat-arun':4.7,'wat-prayoon':4.6,'kudeejeen':4.4,'talat-phlu':4.3,'lhong1919':4.4,'jam-factory':4.4,'iconsiam':4.6,
+ 'royal-barges':4.5,'siriraj':4.4,'wang-lang':4.3,'baan-silapin':4.5,'space-time-cube':4.6,'taling-chan-fm':4.2,'khlong-lat-mayom':4.3,'chatuchak':4.4,
+ 'ortorkor':4.4,'moca':4.6,'rotfai-park':4.5,'bang-pho':4.3,'ari':4.4,'phaya-thai-palace':4.6,'suan-pakkad':4.5,'boatnoodles':4.3,'rotfai-ratchada':4.2,
+ 'huai-khwang':4.3,'rama9-park':4.6,'mae-nak':4.5,'airforce-museum':4.6,'bang-khun-thian':4.2,'bangkrachao':4.5,'koh-kret':4.2,'erawan-museum':4.5,
+ 'ancient-city':4.6,'maeklong':4.3,'amphawa':4.2,'ayutthaya-mahathat':4.6,'ayutthaya-sisanphet':4.6,'ayutthaya-chaiwat':4.7,'river-kwai':4.4,
+ 'war-cemetery':4.7,'phra-pathom':4.7,'sanam-chandra':4.5,'wat-sothon':4.7,'ban-mai':4.3,'sam-yot':4.3,'narai-palace':4.4,
+ 'kwan-riam':4.3,'hua-takhe':4.3,'prasart-museum':4.6,'kunawong':4.7,'sculpture-center':4.6,'seri-thai-park':4.4,'wat-ratchaorot':4.6,'changchui':4.3,
+ 'sanam-luang-2':4.2,'dhammamongkol':4.6,'jt-outlet':4.3,'wat-pariwat':4.5,'lumpinee-stadium':4.5,'sathira':4.7,'siam-amazing-park':4.1,'safari-world':4.3,
+ 'huamum':4.2,'thonburirom':4.4,'sala-chalermkrung':4.5,'express-boat':4.4,'house-samyan':4.6,'song-wat':4.4,'tuptim-shrine':4.2,'tep-bar':4.6,
+ 'studio-lam':4.5,'saxophone':4.5,'octave':4.5,'co-van-kessel':4.9};
+const userRatings=store.get('ratings',{});
+const rating=id=>userRatings[id]??RATINGS[id]??null;
+const stars=id=>{const r=rating(id);return r==null?'':`★ ${r.toFixed(1)}`};
+function setRating(id,v){v=parseFloat(v);if(v>=1&&v<=5)userRatings[id]=v;else delete userRatings[id];store.set('ratings',userRatings);map.closePopup();refresh()}
+window.setRating=setRating;
+const byId=Object.fromEntries(PLACES.map(p=>[p.id,p]));
+const ORIG=Object.fromEntries(PLACES.map(p=>[p.id,[p.lat,p.lng]]));
+function applyPos(){PLACES.forEach(p=>{const o=state.pos[p.id]||ORIG[p.id];p.lat=o[0];p.lng=o[1]})}
+applyPos();
+
+/* Map */
+const map=L.map('map',{zoomControl:true}).setView(CITY.center,CITY.zoom);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+const markers=L.layerGroup().addTo(map), planLayer=L.layerGroup().addTo(map), evLayer=L.layerGroup().addTo(map), meLayer=L.layerGroup().addTo(map);
+
+const gmaps=p=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name+' '+CITY.name)}`;
+const gdir=p=>`https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=transit`;
+const money=n=>n===0?'Free':CITY.currency+n.toLocaleString();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const km=(a,b)=>{const R=6371,r=x=>x*Math.PI/180,dl=r(b.lat-a.lat),dn=r(b.lng-a.lng);
+  const h=Math.sin(dl/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
+const dkm=d=>d<1?Math.round(d*1000)+' m':d.toFixed(1)+' km';
+const DAYN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const daysLabel=s=>s.length===7?'Any day':[...'1234560'].filter(d=>s.includes(d)).map(d=>DAYN[d]).join(' ');
+
+const STOP=new Set(['the','and','with','for','near']);
+const norm=t=>t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/['’`]/g,'').replace(/[^a-z0-9ก-๙]+/g,' ').trim();
+function visible(p){
+  if(!state.cats.has(p.cat))return false;
+  const c=CATS[p.cat]; if(state.max[p.cat]<c.max && p.price>state.max[p.cat])return false;
+  if(state.hideSeen&&state.seen.has(p.id))return false;
+  if(state.favOnly&&!state.fav.has(p.id))return false;
+  const q=state.q.trim().toLowerCase();
+  if(!q)return true;
+  const hay=norm(p.name+' '+p.area+' '+p.dist+' '+p.about+' '+p.tags+' '+CATS[p.cat].label);
+  return hay.includes(norm(q))||norm(q).split(' ').filter(w=>w.length>2&&!STOP.has(w)).every(w=>hay.includes(w)||hay.includes(w.replace(/s$/,'')));
+}
+function pinIcon(p,extra=''){
+  const c=CATS[p.cat];
+  return L.divIcon({className:'',html:`<div class="pin ${state.seen.has(p.id)?'seen':''} ${state.fav.has(p.id)?'fav':''} ${extra}" style="--col:${css(c.col)}">${c.glyph}${rating(p.id)==null?'':`<span class="rt">${rating(p.id).toFixed(1)}</span>`}</div>`,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-12]});
+}
+function popup(p){
+  const seen=state.seen.has(p.id);
+  const far=state.me?` · <b>${dkm(km(state.me,p))}</b> from you`:'';
+  return `<div class="pop"><b>${esc(p.name)}</b><div class="meta">${CATS[p.cat].label} · ${esc(p.area)} · ${money(p.price)}${far}</div>
+    <div class="meta">District: ${esc(p.dist)}</div>
+    <div style="margin-top:4px"><b style="font:700 14px var(--f-body);color:var(--accent)">${rating(p.id)==null?'No rating yet':stars(p.id)+' on Google'}</b>
+    <span class="meta">(approx.) · <a href="${gmaps(p)}" target="_blank" rel="noopener">read reviews</a></span>
+    <label class="meta" style="display:block">Update rating <input type="number" min="1" max="5" step="0.1" style="width:60px" value="${rating(p.id)??''}" onchange="setRating('${p.id}',this.value)"></label></div>
+    <p><b style="font:600 13px var(--f-body)">Hours:</b> ${esc(p.hours)}<br><b style="font:600 13px var(--f-body)">Best:</b> ${esc(p.best)}</p>
+    <p>${esc(p.about)}</p>
+    <div class="row"><a class="btn" href="${gdir(p)}" target="_blank" rel="noopener">Directions</a><a class="btn ghost" href="${gmaps(p)}" target="_blank" rel="noopener">Google Maps</a></div>
+    <div class="row" style="margin-top:6px"><button class="btn ${seen?'ghost':''}" onclick="toggleSeen('${p.id}')">${seen?'Done ✓ (undo)':'Mark as done'}</button>
+    <button class="btn ghost" onclick="toggleFav('${p.id}')">${state.fav.has(p.id)?'★ Favorite (undo)':'☆ Favorite'}</button></div>
+    <div class="meta" style="margin-top:6px">Pin in the wrong spot? <button class="linkbtn" onclick="startMove('${p.id}')">Move pin</button>${state.pos[p.id]?` · <button class="linkbtn" onclick="resetPos('${p.id}')">reset</button>`:''}</div></div>`;
+}
+function renderMarkers(){
+  markers.clearLayers();
+  const list=PLACES.filter(visible);
+  const inPlan=state.plan?new Set(state.plan.steps.map(s=>s.id)):null;
+  list.forEach(p=>{
+    if(inPlan&&inPlan.has(p.id))return;
+    L.marker([p.lat,p.lng],{icon:pinIcon(p),opacity:inPlan?.45:1,title:p.name}).bindPopup(popup(p),{maxWidth:290}).addTo(markers);
+  });
+}
+function refPoint(){if(state.me)return state.me;const c=map.getCenter();return {lat:c.lat,lng:c.lng}}
+function renderList(){
+  const ref=refPoint();
+  const dist=p=>km(ref,p);
+  const az=(a,b)=>a.cat.localeCompare(b.cat)||a.name.localeCompare(b.name);
+  const sorters={cat:az,
+    rating:(a,b)=>(rating(b.id)??0)-(rating(a.id)??0)||az(a,b),
+    near:(a,b)=>dist(a)-dist(b),
+    cheap:(a,b)=>a.price-b.price||(rating(b.id)??0)-(rating(a.id)??0),
+    fav:(a,b)=>(state.fav.has(b.id)-state.fav.has(a.id))||az(a,b)};
+  const list=PLACES.filter(visible).sort(sorters[state.sort]);
+  $('#refNote').textContent=state.sort==='near'?(state.me?(state.tracking?'Live distances from you.':'Distances from your location.'):'Distances from the centre of the map. Pan the map or tap 📍.'):'';
+  $('#shown').textContent=`${list.length} of ${PLACES.length} places`;
+  $('#list').innerHTML=list.map(p=>`<button class="item ${state.seen.has(p.id)?'seen':''}" data-id="${p.id}" style="--col:var(${CATS[p.cat].col})">
+    <span class="dot"></span><span><span class="nm">${esc(p.name)}</span><br><span class="meta">${state.sort==='near'||state.me?dkm(dist(p))+' · ':''}${stars(p.id)?stars(p.id)+' · ':''}${CATS[p.cat].label} · ${esc(p.area)} · ${esc(p.hours)}</span></span>
+    <span class="price">${state.fav.has(p.id)?'<span style="color:var(--accent)">★</span> ':''}${money(p.price)}</span></button>`).join('')||'<p class="meta">Nothing matches. Loosen a price slider or clear the search.</p>';
+  const done=[...state.seen].filter(id=>byId[id]).length;
+  $('#seenCount').textContent=done;
+  $('#totalCount').textContent=PLACES.length;
+  $('#progBar').style.width=(100*done/PLACES.length)+'%';
+}
+function renderFilters(){
+  $('#catChips').innerHTML=Object.entries(CATS).map(([k,c])=>`<button class="chip" style="--col:var(${c.col})" data-cat="${k}" aria-pressed="${state.cats.has(k)}"><i></i>${c.label}</button>`).join('');
+  $('#priceRows').innerHTML=Object.entries(CATS).map(([k,c])=>`<div class="prow" style="--col:var(${c.col})">
+    <label for="pr-${k}"><i></i>${c.label.split(' ')[0]}</label>
+    <input type="range" id="pr-${k}" data-cat="${k}" min="0" max="${c.max}" step="${c.step}" value="${state.max[k]}">
+    <output id="po-${k}">${state.max[k]>=c.max?'Any':'≤ '+CITY.currency+state.max[k]}</output></div>`).join('');
+}
+function renderDistricts(){
+  const by={};PLACES.forEach(p=>{(by[p.dist]=by[p.dist]||[]).push(p)});
+  const covered=DISTRICTS.filter(d=>by[d]);
+  $('#distSum').textContent=`Districts covered: ${covered.length} of ${DISTRICTS.length}`;
+  const chip=(d,n)=>{const ps=by[d]||[];const dn=ps.filter(p=>state.seen.has(p.id)).length;
+    return `<button class="chip dchip" data-dist="${esc(d)}" ${n?'':'disabled'} aria-pressed="${state.q===d}">${esc(d)} <span class="meta">${n?dn+'/'+n:'–'}</span></button>`};
+  $('#distList').innerHTML=DISTRICTS.slice().sort((a,b)=>(by[b]?.length||0)-(by[a]?.length||0)||a.localeCompare(b)).map(d=>chip(d,by[d]?.length||0)).join('')+chip(OUTSIDE,by[OUTSIDE]?.length||0)
+    +`<p class="meta" style="margin:6px 0 0">Districts with “–” (Nong Chok, Bang Bon, Nong Khaem, Rat Burana, Lak Si, Sai Mai, Saphan Sung, Bang Na) are residential or industrial suburbs: I found only malls, spas and golf courses there, nothing worth a trip. Tap a district to filter; tap again to clear.</p>`;
+}
+function refresh(){renderMarkers();renderList();renderDistricts();if(state.plan)drawPlan(state.plan,false);if(!$('#pane-plans').hidden&&!state.plan)renderPlans();if(!$('#pane-weekends').hidden)renderWeekends()}
+
+function toggleSeen(id){
+  state.seen.has(id)?state.seen.delete(id):state.seen.add(id);
+  store.set('seen',[...state.seen]);map.closePopup();refresh();if(state.plan)openPlan(state.plan,false);
+}
+function toggleFav(id){
+  state.fav.has(id)?state.fav.delete(id):state.fav.add(id);
+  store.set('fav',[...state.fav]);map.closePopup();refresh();
+}
+window.toggleSeen=toggleSeen;window.toggleFav=toggleFav;
+function startMove(id){state.moving=id;map.closePopup();toast(`Tap the map where “${byId[id].name}” really is.`,true)}
+function resetPos(id){delete state.pos[id];store.set('pos',state.pos);applyPos();map.closePopup();refresh()}
+window.startMove=startMove;window.resetPos=resetPos;
+let toastT;function toast(msg,stay){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);if(!stay)toastT=setTimeout(()=>t.hidden=true,3500)}
+
+/* Plans */
+const planProgress=pl=>pl.steps.filter(s=>state.seen.has(s.id)).length;
+function renderPlans(){
+  const today=new Date().getDay();
+  $('#planList').innerHTML=`<p class="meta" style="margin-top:0">${PLANS.length} plans. Done stops count towards a plan. Green day = works today.</p>`+PLANS.map(pl=>{const n=planProgress(pl),t=pl.steps.length;
+    return `<button class="plan ${n===t?'complete':''}" data-plan="${pl.id}"><span class="tag">${pl.kind}</span><span class="meta">${pl.hrs} · ${pl.cost}</span>
+    <h3>${n===t?'✓ ':''}${esc(pl.title)}</h3><div class="meta">${t} stops · <span style="color:${pl.days.includes(today)?'var(--c-nature)':'inherit'}">${daysLabel(pl.days)}</span> · ${esc(pl.why)}</div>
+    <div class="bar"><i style="width:${100*n/t}%"></i></div></button>`}).join('');
+}
+function openPlan(pl,fit=true){
+  state.plan=pl;
+  $('#planList').hidden=true;$('#planDetail').hidden=false;
+  const today=new Date().getDay(),ok=pl.days.includes(today);
+  const next=pl.steps.findIndex(s=>!state.seen.has(s.id));
+  let total=0,html=`<button class="back" id="planBack">← All plans</button><span class="tag">${pl.kind}</span><span class="meta">${pl.hrs} · ${pl.cost}</span><h3 style="font:700 20px var(--f-display);margin:6px 0">${esc(pl.title)}</h3>
+    <p class="meta" style="margin:0 0 6px">Works on: <b style="color:${ok?'var(--c-nature)':'var(--accent)'}">${daysLabel(pl.days)}</b>${ok?' (today ✓)':' (not today)'} · ${planProgress(pl)}/${pl.steps.length} stops done</p><p>${esc(pl.why)}</p>`;
+  if(next>=0){const np=byId[pl.steps[next].id];html+=`<div class="nextbox"><span class="sec">Next stop</span><br><b>${next+1}. ${esc(np.name)}</b>${state.me?` · ${dkm(km(state.me,np))} away`:''}
+    <div class="row" style="margin-top:6px"><a class="btn" href="${gdir(np)}" target="_blank" rel="noopener">Directions</a><button class="btn ghost" data-done="${np.id}">Mark done</button>${state.tracking?'':'<button class="btn ghost" id="trackFromPlan">Track me</button>'}</div></div>`}
+  else html+=`<div class="nextbox">🎉 Plan complete.</div>`;
+  html+='<ol class="steps">';
+  pl.steps.forEach((s,i)=>{
+    const p=byId[s.id],dn=state.seen.has(p.id);
+    if(i>0){const d=km(byId[pl.steps[i-1].id],p);total+=d;html+=`<li class="leg">${d.toFixed(1)} km · ${esc(s.go)}</li>`}
+    else html+=`<li class="leg" style="border:0">Getting there: ${esc(s.go)}</li>`;
+    html+=`<li class="step ${dn?'sdone':''}"><span class="n">${dn?'✓':i+1}</span><div><span class="t">${s.t}</span> <span class="meta">· ${s.m} min · ${money(p.price)}</span><br>
+      <button class="stepname" data-id="${p.id}">${esc(p.name)}</button>
+      <div class="meta">${stars(p.id)?`<b style="color:var(--accent)">${stars(p.id)}</b> Google (approx.) · `:''}<a href="${gmaps(p)}" target="_blank" rel="noopener" style="color:var(--accent)">reviews</a> · <a href="${gdir(p)}" target="_blank" rel="noopener" style="color:var(--accent)">directions</a> · <button class="linkbtn" data-done="${p.id}">${dn?'undo done':'mark done'}</button></div>
+      <p class="why">${esc(s.tip)}</p><p class="meta why">Hours: ${esc(p.hours)}. ${esc(p.best)}</p></div></li>`;
+  });
+  html+=`</ol><p class="meta">Approx. ${total.toFixed(1)} km straight line between stops. Estimated cost of tickets ${money(pl.steps.reduce((a,s)=>a+byId[s.id].price,0))} per person.</p>`;
+  const sc=$('.scroll').scrollTop;
+  $('#planDetail').innerHTML=html;
+  if(!fit)$('.scroll').scrollTop=sc;
+  drawPlan(pl,fit);
+}
+function drawPlan(pl,fit){
+  planLayer.clearLayers();
+  const pts=pl.steps.map(s=>[byId[s.id].lat,byId[s.id].lng]);
+  L.polyline(pts,{color:css('--accent'),weight:4,dashArray:'8 10',opacity:.9}).addTo(planLayer);
+  pl.steps.forEach((s,i)=>{
+    const p=byId[s.id],dn=state.seen.has(p.id);
+    L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div class="pin num ${dn?'seen':''}">${dn?'✓':i+1}</div>`,iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-14]}),zIndexOffset:500})
+      .bindPopup(`<div class="pop"><b>${i+1}. ${esc(p.name)}</b><p>${s.t} · ${s.m} min</p><p>${esc(s.tip)}</p><div class="row"><a class="btn" href="${gdir(p)}" target="_blank" rel="noopener">Directions</a><button class="btn ghost" onclick="toggleSeen('${p.id}')">${dn?'Undo done':'Mark done'}</button></div></div>`).addTo(planLayer);
+  });
+  if(fit)map.fitBounds(pts.concat(state.tracking&&state.me?[[state.me.lat,state.me.lng]]:[]),{padding:[50,50],maxZoom:14});
+  renderMarkers();
+}
+function closePlan(){state.plan=null;planLayer.clearLayers();$('#planList').hidden=false;$('#planDetail').hidden=true;renderPlans();renderMarkers()}
+
+/* Weekends */
+function renderWeekends(){
+  const now=new Date();now.setHours(0,0,0,0);
+  const opts=PLANS.filter(p=>p.days.includes('6')||p.days.includes('0'));
+  const doneW=WEEKENDS.filter(w=>state.wkDone.has(w.sat)).length;
+  $('#wkList').innerHTML=`<p class="meta" style="margin-top:0">One plan per weekend until you leave, matched to festivals and opening days. Change any weekend's plan; ${doneW}/${WEEKENDS.length} weekends done.</p>`+WEEKENDS.map(w=>{
+    const sat=new Date(w.sat+'T00:00:00'),sun=new Date(sat);sun.setDate(sun.getDate()+1);
+    const past=sun<now,cur=!past&&sat-now<7*864e5;
+    const pid=state.wkPlan[w.sat]||w.plan,pl=PLANS.find(p=>p.id===pid);
+    const n=planProgress(pl);
+    return `<div class="wk ${cur?'cur':''} ${past?'past':''}"><div class="date"><b>${sat.getDate()}</b><span>${sat.toLocaleDateString('en-GB',{month:'short'})}</span></div><div>
+      ${cur?'<span class="tag">This weekend</span>':''}<label class="meta" style="float:right"><input type="checkbox" data-wkdone="${w.sat}" ${state.wkDone.has(w.sat)?'checked':''}> done</label>
+      <button class="nm linkbtn" data-plan="${pl.id}" style="font-weight:600;color:var(--ink);text-decoration:none">${esc(pl.title)}</button>
+      <div class="meta">${n}/${pl.steps.length} stops done · ${pl.hrs} · ${pl.cost}</div>
+      <div class="meta">${esc(w.note)}</div>
+      <select data-wk="${w.sat}" class="wksel" aria-label="Change plan for this weekend">${opts.map(o=>`<option value="${o.id}" ${o.id===pl.id?'selected':''}>${esc(o.title)}</option>`).join('')}</select></div></div>`}).join('');
+}
+
+/* Live tracking */
+const LocCtl=L.Control.extend({options:{position:'topright'},onAdd(){const d=L.DomUtil.create('div','leaflet-bar trackctl');
+  d.innerHTML='<button id="trackBtn" title="Track my location" aria-pressed="false">◎ Track me</button><button id="followBtn" title="Keep the map centred on me" hidden aria-pressed="false">Follow</button>';
+  L.DomEvent.disableClickPropagation(d);return d}});
+new LocCtl().addTo(map);
+let meDot=null,meAcc=null,lastListT=0;
+function onPos(pos){
+  const c=pos.coords;state.me={lat:c.latitude,lng:c.longitude};
+  if(!meDot){meDot=L.marker([c.latitude,c.longitude],{icon:L.divIcon({className:'',html:'<div class="me"><i></i></div>',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:1000}).addTo(meLayer);
+    meAcc=L.circle([c.latitude,c.longitude],{radius:c.accuracy,color:'#2b7bff',weight:1,fillOpacity:.12}).addTo(meLayer);
+    map.setView([c.latitude,c.longitude],Math.max(map.getZoom(),15))}
+  else{meDot.setLatLng([c.latitude,c.longitude]);meAcc.setLatLng([c.latitude,c.longitude]).setRadius(c.accuracy)}
+  const h=c.heading;const el=meDot.getElement()?.querySelector('.me');if(el){el.classList.toggle('hd',h!=null&&!isNaN(h));if(h!=null&&!isNaN(h))el.style.setProperty('--hd',h+'deg')}
+  if(state.follow)map.panTo([c.latitude,c.longitude],{animate:true});
+  const t=Date.now();if(t-lastListT>8000){lastListT=t;renderList();if(state.plan)openPlan(state.plan,false)}
+  $('#trackState').textContent=`Live · ±${Math.round(c.accuracy)} m`;
+}
+function startTracking(){
+  if(!navigator.geolocation){toast('Location is not available in this browser.');return}
+  state.tracking=true;state.follow=true;lastListT=0;
+  state.watchId=navigator.geolocation.watchPosition(onPos,err=>{stopTracking();toast(err.code===1?'Location permission was denied. Allow it in your browser settings to track.':'Could not get your location.')},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+  $('#trackBtn').setAttribute('aria-pressed','true');$('#trackBtn').textContent='◉ Tracking';$('#followBtn').hidden=false;$('#followBtn').setAttribute('aria-pressed','true');
+  $('#trackState').textContent='Finding you…';
+  try{navigator.wakeLock?.request('screen').then(w=>state.wake=w).catch(()=>{})}catch(e){}
+}
+function stopTracking(){
+  if(state.watchId!=null)navigator.geolocation.clearWatch(state.watchId);
+  state.tracking=false;state.follow=false;state.watchId=null;
+  $('#trackBtn').setAttribute('aria-pressed','false');$('#trackBtn').textContent='◎ Track me';$('#followBtn').hidden=true;$('#trackState').textContent='';
+  try{state.wake?.release()}catch(e){}
+}
+map.on('dragstart',()=>{if(state.follow){state.follow=false;$('#followBtn').setAttribute('aria-pressed','false')}});
+
+/* Events */
+const fmt=d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+function allEvents(){return EVENTS.concat(state.userEvents.map(e=>({...e,user:true})))}
+function renderEvents(){
+  const f=state.evFilter,now=new Date();now.setHours(0,0,0,0);
+  const horizon=new Date(now);horizon.setDate(horizon.getDate()+30);
+  let list=allEvents().filter(e=>{
+    if(e.recurring)return f!=='dated';
+    const s=new Date(e.start),en=new Date(e.end||e.start);
+    if(f==='upcoming')return en>=now&&s<=LEAVE;
+    if(f==='month')return en>=now&&s<=horizon;
+    if(f==='dated')return true;
+    return true;
+  }).sort((a,b)=>(a.recurring?1:0)-(b.recurring?1:0)||new Date(a.start)-new Date(b.start));
+  $('#evFilter').innerHTML=[['upcoming','Until I leave'],['month','Next 30 days'],['dated','All dated']].map(([k,l])=>`<button class="chip" data-ev="${k}" aria-pressed="${f===k}" style="--col:var(--accent)"><i></i>${l}</button>`).join('');
+  $('#evList').innerHTML=list.map((e,i)=>{
+    const s=e.start?new Date(e.start):null;
+    return `<div class="ev"><div class="date">${s?`<b>${s.getDate()}</b><span>${s.toLocaleDateString('en-GB',{month:'short'})}</span>`:'<b>↻</b><span>recurring</span>'}</div>
+    <div><button class="nm" data-ev-i="${allEvents().indexOf(e)}">${esc(e.title)}</button>
+    <span class="badge ${/free/i.test(e.cost)?'free':''}">${esc(e.cost)}</span>${e.approx?'<span class="badge">verify date</span>':''}${e.user?'<span class="badge">mine</span>':''}
+    <div class="meta">${s?fmt(s)+(e.end&&e.end!==e.start?' – '+fmt(new Date(e.end)):''):'Ongoing'} · ${esc(e.place)}</div>
+    <div class="meta">${esc(e.note||'')}</div></div></div>`}).join('')||'<p class="meta">Nothing in this window.</p>';
+  evLayer.clearLayers();
+  list.forEach(e=>{
+    if(e.lat==null)return;
+    L.marker([e.lat,e.lng],{icon:L.divIcon({className:'',html:'<div class="pin ev"><span>★</span></div>',iconSize:[26,26],iconAnchor:[13,13]}),title:e.title})
+      .bindPopup(`<div class="pop"><b>${esc(e.title)}</b><div class="meta">${esc(e.place)}</div><p>${esc(e.note||'')}</p></div>`).addTo(evLayer);
+  });
+}
+
+/* Sync across devices (only when opened as a claude.ai artifact; otherwise this browser only) */
+const SYNC_KEYS=['seen','fav','ratings','userEvents','pos','wkPlan','wkDone'];
+const sync={ref:null,ready:false,t:null,
+  push(){if(!this.ready)return;clearTimeout(this.t);this.t=setTimeout(()=>{
+    const data={v:1,at:Date.now()};SYNC_KEYS.forEach(k=>data[k]=store.get(k,null));
+    this.ref.set(data).then(()=>{$('#syncState').textContent='Synced ✓'}).catch(()=>{$('#syncState').textContent='Not synced'});},800)}};
+async function initSync(){
+  try{
+    if(!window.claude||!window.claude.use)return;
+    const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+    if(!db||!user)return;const id=await user.id();if(!id)return;
+    sync.ref=db.doc(`data/users/${id}/state`);
+    const snap=await sync.ref.get();const r=snap.exists?snap.data():null;
+    if(r){const first=!store.get('syncedOnce',false);
+      const uni=(a,b)=>[...new Set([...(a||[]),...(b||[])])];
+      const pick=(k,merge)=>{const l=store.get(k,null);const v=first&&l!=null?merge(r[k],l):(r[k]??l);try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+      pick('seen',uni);pick('fav',uni);pick('wkDone',uni);
+      ['ratings','pos','wkPlan'].forEach(k=>pick(k,(a,b)=>({...(a||{}),...(b||{})})));
+      pick('userEvents',(a,b)=>{const m=new Map();[...(a||[]),...(b||[])].forEach(e=>m.set(e.title+e.start,e));return [...m.values()]});
+      state.seen=new Set(store.get('seen',[]));state.fav=new Set(store.get('fav',[]));state.wkDone=new Set(store.get('wkDone',[]));
+      state.userEvents=store.get('userEvents',[]);state.pos=store.get('pos',{});state.wkPlan=store.get('wkPlan',{});
+      Object.keys(userRatings).forEach(k=>delete userRatings[k]);Object.assign(userRatings,store.get('ratings',{}));
+      applyPos();refresh();}
+    try{localStorage.setItem('syncedOnce','true')}catch(e){}
+    sync.ready=true;$('#syncState').textContent='Synced ✓';if(!r)sync.push();
+  }catch(e){$('#syncState').textContent=''}
+}
+
+/* Wiring */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x===t));
+  ['places','plans','weekends','events'].forEach(n=>$('#pane-'+n).hidden=n!==t.dataset.tab);
+  const ev=t.dataset.tab==='events';
+  ev?map.addLayer(evLayer):map.removeLayer(evLayer);
+  if(ev)renderEvents();
+  if(t.dataset.tab==='weekends')renderWeekends();
+  if(t.dataset.tab==='plans'&&!state.plan)renderPlans();
+}));
+$('#catChips').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;
+  const k=b.dataset.cat;state.cats.has(k)?state.cats.delete(k):state.cats.add(k);renderFilters();refresh()});
+$('#priceRows').addEventListener('input',e=>{const r=e.target;if(!r.dataset.cat)return;
+  state.max[r.dataset.cat]=+r.value;const c=CATS[r.dataset.cat];
+  $('#po-'+r.dataset.cat).textContent=+r.value>=c.max?'Any':'≤ '+CITY.currency+r.value;refresh()});
+$('#q').addEventListener('input',e=>{state.q=e.target.value;refresh()});
+$('#distList').addEventListener('click',e=>{const b=e.target.closest('[data-dist]');if(!b)return;
+  state.q=state.q===b.dataset.dist?'':b.dataset.dist;$('#q').value=state.q;refresh();
+  const ps=PLACES.filter(visible);if(ps.length)map.fitBounds(ps.map(p=>[p.lat,p.lng]),{padding:[40,40],maxZoom:15})});
+$('#favOnly').addEventListener('change',e=>{state.favOnly=e.target.checked;refresh()});
+$('#sort').addEventListener('change',e=>{state.sort=e.target.value;renderList()});
+$('#locate').addEventListener('click',()=>{state.tracking?stopTracking():startTracking();state.sort='near';$('#sort').value='near';renderList()});
+document.addEventListener('click',e=>{
+  if(e.target.closest('#trackBtn')||e.target.id==='trackFromPlan'){state.tracking?stopTracking():startTracking();if(state.plan)setTimeout(()=>openPlan(state.plan,false),0);return}
+  if(e.target.closest('#followBtn')){state.follow=!state.follow;$('#followBtn').setAttribute('aria-pressed',state.follow);if(state.follow&&state.me)map.panTo([state.me.lat,state.me.lng]);return}
+});
+map.on('moveend',()=>{if(state.sort==='near'&&!state.me)renderList()});
+$('#hideSeen').addEventListener('change',e=>{state.hideSeen=e.target.checked;refresh()});
+$('#list').addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(!b)return;focusPlace(b.dataset.id)});
+function focusPlace(id){
+  const p=byId[id];state.follow=false;$('#followBtn')?.setAttribute('aria-pressed','false');map.flyTo([p.lat,p.lng],15,{duration:.8});
+  L.popup({maxWidth:290}).setLatLng([p.lat,p.lng]).setContent(popup(p)).openOn(map);
+}
+$('#planList').addEventListener('click',e=>{const b=e.target.closest('[data-plan]');if(b)openPlan(PLANS.find(p=>p.id===b.dataset.plan))});
+$('#planDetail').addEventListener('click',e=>{
+  if(e.target.id==='planBack')return closePlan();
+  const d=e.target.closest('[data-done]');if(d)return toggleSeen(d.dataset.done);
+  const b=e.target.closest('[data-id]');if(b)focusPlace(b.dataset.id)});
+$('#wkList').addEventListener('change',e=>{
+  const s=e.target.closest('[data-wk]');if(s){state.wkPlan[s.dataset.wk]=s.value;store.set('wkPlan',state.wkPlan);renderWeekends();return}
+  const c=e.target.closest('[data-wkdone]');if(c){c.checked?state.wkDone.add(c.dataset.wkdone):state.wkDone.delete(c.dataset.wkdone);store.set('wkDone',[...state.wkDone]);renderWeekends()}});
+$('#wkList').addEventListener('click',e=>{const b=e.target.closest('button[data-plan]');if(!b)return;
+  document.querySelector('.tab[data-tab=plans]').click();openPlan(PLANS.find(p=>p.id===b.dataset.plan))});
+$('#evFilter').addEventListener('click',e=>{const b=e.target.closest('[data-ev]');if(!b)return;state.evFilter=b.dataset.ev;renderEvents()});
+$('#evList').addEventListener('click',e=>{const b=e.target.closest('[data-ev-i]');if(!b)return;
+  const ev=allEvents()[+b.dataset.evI];if(ev&&ev.lat!=null)map.flyTo([ev.lat,ev.lng],15,{duration:.8})});
+$('#evPick').addEventListener('click',()=>{state.picking=true;$('#evPickState').textContent='Click a spot on the map…'});
+map.on('click',e=>{
+  if(state.moving){const id=state.moving;state.moving=null;state.pos[id]=[+e.latlng.lat.toFixed(5),+e.latlng.lng.toFixed(5)];store.set('pos',state.pos);applyPos();refresh();toast(`Pin moved for ${byId[id].name}.`);return}
+  if(!state.picking)return;state.picking=false;state.pick=e.latlng;$('#evPickState').textContent='Spot saved ✓'});
+$('#evForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const ev={title:$('#evTitle').value.trim(),start:$('#evDate').value,end:$('#evDate').value,place:$('#evPlace').value.trim()||CITY.name,
+    lat:state.pick?state.pick.lat:null,lng:state.pick?state.pick.lng:null,cost:'?',note:$('#evNote').value.trim()};
+  state.userEvents.push(ev);store.set('userEvents',state.userEvents);
+  e.target.reset();state.pick=null;$('#evPickState').textContent='Saved';renderEvents();
+});
+$('#toast').addEventListener('click',()=>{$('#toast').hidden=true;state.moving=null});
+$('#backupBtn').addEventListener('click',()=>{const b=$('#backup');b.hidden=!b.hidden;if(!b.hidden){const d={};SYNC_KEYS.forEach(k=>d[k]=store.get(k,null));$('#backupTxt').value=JSON.stringify(d);$('#backupState').textContent=''}});
+$('#backupCopy').addEventListener('click',()=>{const t=$('#backupTxt');t.select();(navigator.clipboard?navigator.clipboard.writeText(t.value):Promise.reject()).then(()=>$('#backupState').textContent='Copied',()=>{try{document.execCommand('copy');$('#backupState').textContent='Copied'}catch(e){$('#backupState').textContent='Select the text and copy it'}})});
+$('#backupLoad').addEventListener('click',()=>{try{const d=JSON.parse($('#backupTxt').value);SYNC_KEYS.forEach(k=>{if(d[k]!=null)store.set(k,d[k])});location.reload()}catch(e){$('#backupState').textContent='That code is not valid. Paste the whole code.'}});
+$('#mapToggle').addEventListener('click',()=>{document.body.classList.toggle('bigmap');setTimeout(()=>map.invalidateSize(),250)});
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>setTimeout(refresh,50));
+
+/* Boot */
+document.title=CITY.name+' Field Guide';$('#cityTitle').textContent=CITY.name+' Field Guide';$('#leaveLabel').textContent=CITY.leaveLabel;
+$('#daysLeft').textContent=Math.max(0,Math.ceil((LEAVE-new Date())/864e5));
+renderFilters();renderPlans();refresh();
+map.removeLayer(evLayer);
+initSync();
+</script>
+</body>
+</html>

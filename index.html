@@ -198,7 +198,7 @@ details.dist summary{cursor:pointer;font-weight:600}
           <select id="sort" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)">
             <option value="cat">Category, A–Z</option><option value="rating">Best reviewed</option>
             <option value="near">Closest</option><option value="cheap">Cheapest first</option><option value="fav">Favorites first</option></select>
-          <button class="btn ghost" type="button" id="locate" title="Track my location for Closest">📍</button></div>
+          <button class="btn ghost" type="button" id="locate" title="Find me and sort by distance">📍</button></div>
         <div class="meta" id="refNote"></div>
         <div class="count"><span id="shown"></span><span><label><input type="checkbox" id="favOnly"> favorites</label> &nbsp; <label><input type="checkbox" id="hideSeen"> hide done</label></span></div>
         <div id="list"></div>
@@ -638,7 +638,7 @@ const state={
   seen:new Set(store.get('seen',[])), fav:new Set(store.get('fav',[])), favOnly:false,
   q:'', hideSeen:false, sort:'cat', me:null, plan:null, evFilter:'upcoming', evKind:'all',
   userEvents:store.get('userEvents',[]), picking:false, pick:null,
-  pos:store.get('pos',{}), moving:null, tracking:false, follow:false, watchId:null,
+  pos:store.get('pos',{}), moving:null,
   wkPlan:store.get('wkPlan',{}), wkDone:new Set(store.get('wkDone',[])),
 };
 /* Approximate Google Maps star ratings from memory (not live). Edit any value in its popup, or here. */
@@ -733,7 +733,7 @@ function renderList(){
     cheap:(a,b)=>a.price-b.price||(rating(b.id)??0)-(rating(a.id)??0),
     fav:(a,b)=>(state.fav.has(b.id)-state.fav.has(a.id))||az(a,b)};
   const list=PLACES.filter(visible).sort(sorters[state.sort]);
-  $('#refNote').textContent=state.sort==='near'?(state.me?(state.tracking?'Live distances from you.':'Distances from your location.'):'Distances from the centre of the map. Pan the map or tap 📍.'):'';
+  $('#refNote').textContent=state.sort==='near'?(state.me?'Distances from where you last tapped Near me.':'Distances from the centre of the map. Pan the map or tap 📍.'):'';
   $('#shown').textContent=`${list.length} of ${PLACES.length} places`;
   $('#list').innerHTML=list.map(p=>`<button class="item ${state.seen.has(p.id)?'seen':''}" data-id="${p.id}" style="--col:var(${CATS[p.cat].col})">
     <span class="dot"></span><span><span class="nm">${esc(p.name)}</span><br><span class="meta">${state.sort==='near'||state.me?dkm(dist(p))+' · ':''}${stars(p.id)?stars(p.id)+' · ':''}${CATS[p.cat].label} · ${esc(p.area)} · ${esc(p.hours)}</span></span>
@@ -792,7 +792,7 @@ function openPlan(pl,fit=true){
   let total=0,html=`<button class="back" id="planBack">← All plans</button><span class="tag">${pl.kind}</span><span class="meta">${pl.hrs} · ${pl.cost}</span><h3 style="font:700 20px var(--f-display);margin:6px 0">${esc(pl.title)}</h3>
     <p class="meta" style="margin:0 0 6px">Works on: <b style="color:${ok?'var(--c-nature)':'var(--accent)'}">${daysLabel(pl.days)}</b>${ok?' (today ✓)':' (not today)'} · ${planProgress(pl)}/${pl.steps.length} stops done</p><p>${esc(pl.why)}</p>`;
   if(next>=0){const np=byId[pl.steps[next].id];html+=`<div class="nextbox"><span class="sec">Next stop</span><br><b>${next+1}. ${esc(np.name)}</b>${state.me?` · ${dkm(km(state.me,np))} away`:''}
-    <div class="row" style="margin-top:6px"><a class="btn" href="${gdir(np)}" target="_blank" rel="noopener">Directions</a><button class="btn ghost" data-done="${np.id}">Mark done</button>${state.tracking?'':'<button class="btn ghost" id="trackFromPlan">Track me</button>'}</div></div>`}
+    <div class="row" style="margin-top:6px"><a class="btn" href="${gdir(np)}" target="_blank" rel="noopener">Directions</a><button class="btn ghost" data-done="${np.id}">Mark done</button><button class="btn ghost" id="trackFromPlan">Near me</button></div></div>`}
   else html+=`<div class="nextbox">🎉 Plan complete.</div>`;
   html+='<ol class="steps">';
   pl.steps.forEach((s,i)=>{
@@ -819,7 +819,7 @@ function drawPlan(pl,fit){
     L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div class="pin num ${dn?'seen':''}">${dn?'✓':i+1}</div>`,iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-14]}),zIndexOffset:500})
       .bindPopup(`<div class="pop"><b>${i+1}. ${esc(p.name)}</b><p>${s.t} · ${s.m} min</p><p>${esc(s.tip)}</p><div class="row"><a class="btn" href="${gdir(p)}" target="_blank" rel="noopener">Directions</a><button class="btn ghost" onclick="toggleSeen('${p.id}')">${dn?'Undo done':'Mark done'}</button></div></div>`).addTo(planLayer);
   });
-  if(fit)map.fitBounds(pts.concat(state.tracking&&state.me?[[state.me.lat,state.me.lng]]:[]),{padding:[50,50],maxZoom:14});
+  if(fit)map.fitBounds(pts.concat(state.me?[[state.me.lat,state.me.lng]]:[]),{padding:[50,50],maxZoom:14});
   renderMarkers();
 }
 function closePlan(){state.plan=null;planLayer.clearLayers();$('#planList').hidden=false;$('#planDetail').hidden=true;renderPlans();renderMarkers()}
@@ -842,38 +842,26 @@ function renderWeekends(){
       <select data-wk="${w.sat}" class="wksel" aria-label="Change plan for this weekend">${opts.map(o=>`<option value="${o.id}" ${o.id===pl.id?'selected':''}>${esc(o.title)}</option>`).join('')}</select></div></div>`}).join('');
 }
 
-/* Live tracking */
+/* Near me: find the user once (no live tracking; directions open in Google Maps) */
 const LocCtl=L.Control.extend({options:{position:'topright'},onAdd(){const d=L.DomUtil.create('div','leaflet-bar trackctl');
-  d.innerHTML='<button id="trackBtn" title="Track my location" aria-pressed="false">◎ Track me</button><button id="followBtn" title="Keep the map centred on me" hidden aria-pressed="false">Follow</button>';
+  d.innerHTML='<button id="trackBtn" title="Show where I am and sort places by distance">◎ Near me</button>';
   L.DomEvent.disableClickPropagation(d);return d}});
 new LocCtl().addTo(map);
-let meDot=null,meAcc=null,lastListT=0;
+let meDot=null,meAcc=null;
 function onPos(pos){
   const c=pos.coords;state.me={lat:c.latitude,lng:c.longitude};
   if(!meDot){meDot=L.marker([c.latitude,c.longitude],{icon:L.divIcon({className:'',html:'<div class="me"><i></i></div>',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:1000}).addTo(meLayer);
-    meAcc=L.circle([c.latitude,c.longitude],{radius:c.accuracy,color:'#2b7bff',weight:1,fillOpacity:.12}).addTo(meLayer);
-    map.setView([c.latitude,c.longitude],Math.max(map.getZoom(),15))}
+    meAcc=L.circle([c.latitude,c.longitude],{radius:c.accuracy,color:'#2b7bff',weight:1,fillOpacity:.12}).addTo(meLayer)}
   else{meDot.setLatLng([c.latitude,c.longitude]);meAcc.setLatLng([c.latitude,c.longitude]).setRadius(c.accuracy)}
-  const h=c.heading;const el=meDot.getElement()?.querySelector('.me');if(el){el.classList.toggle('hd',h!=null&&!isNaN(h));if(h!=null&&!isNaN(h))el.style.setProperty('--hd',h+'deg')}
-  if(state.follow)map.panTo([c.latitude,c.longitude],{animate:true});
-  const t=Date.now();if(t-lastListT>8000){lastListT=t;renderList();if(state.plan)openPlan(state.plan,false)}
-  $('#trackState').textContent=`Live · ±${Math.round(c.accuracy)} m`;
+  map.setView([c.latitude,c.longitude],Math.max(map.getZoom(),15));
+  $('#trackBtn').textContent='◎ Near me';$('#trackState').textContent='';
+  state.sort='near';$('#sort').value='near';renderList();if(state.plan)openPlan(state.plan,false);
 }
-function startTracking(){
+function locateOnce(){
   if(!navigator.geolocation){toast('Location is not available in this browser.');return}
-  state.tracking=true;state.follow=true;lastListT=0;
-  state.watchId=navigator.geolocation.watchPosition(onPos,err=>{stopTracking();toast(err.code===1?'Location permission was denied. Allow it in your browser settings to track.':'Could not get your location.')},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
-  $('#trackBtn').setAttribute('aria-pressed','true');$('#trackBtn').textContent='◉ Tracking';$('#followBtn').hidden=false;$('#followBtn').setAttribute('aria-pressed','true');
-  $('#trackState').textContent='Finding you…';
-  try{navigator.wakeLock?.request('screen').then(w=>state.wake=w).catch(()=>{})}catch(e){}
+  $('#trackBtn').textContent='… Finding you';
+  navigator.geolocation.getCurrentPosition(onPos,err=>{$('#trackBtn').textContent='◎ Near me';toast(err.code===1?'Location permission was denied. Allow it in your browser settings.':'Could not get your location.')},{enableHighAccuracy:true,maximumAge:30000,timeout:20000});
 }
-function stopTracking(){
-  if(state.watchId!=null)navigator.geolocation.clearWatch(state.watchId);
-  state.tracking=false;state.follow=false;state.watchId=null;
-  $('#trackBtn').setAttribute('aria-pressed','false');$('#trackBtn').textContent='◎ Track me';$('#followBtn').hidden=true;$('#trackState').textContent='';
-  try{state.wake?.release()}catch(e){}
-}
-map.on('dragstart',()=>{if(state.follow){state.follow=false;$('#followBtn').setAttribute('aria-pressed','false')}});
 
 /* Events */
 const fmt=d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
@@ -958,16 +946,15 @@ $('#distList').addEventListener('click',e=>{const b=e.target.closest('[data-dist
   const ps=PLACES.filter(visible);if(ps.length)map.fitBounds(ps.map(p=>[p.lat,p.lng]),{padding:[40,40],maxZoom:15})});
 $('#favOnly').addEventListener('change',e=>{state.favOnly=e.target.checked;refresh()});
 $('#sort').addEventListener('change',e=>{state.sort=e.target.value;renderList()});
-$('#locate').addEventListener('click',()=>{state.tracking?stopTracking():startTracking();state.sort='near';$('#sort').value='near';renderList()});
+$('#locate').addEventListener('click',locateOnce);
 document.addEventListener('click',e=>{
-  if(e.target.closest('#trackBtn')||e.target.id==='trackFromPlan'){state.tracking?stopTracking():startTracking();if(state.plan)setTimeout(()=>openPlan(state.plan,false),0);return}
-  if(e.target.closest('#followBtn')){state.follow=!state.follow;$('#followBtn').setAttribute('aria-pressed',state.follow);if(state.follow&&state.me)map.panTo([state.me.lat,state.me.lng]);return}
+  if(e.target.closest('#trackBtn')||e.target.id==='trackFromPlan'){locateOnce();return}
 });
 map.on('moveend',()=>{if(state.sort==='near'&&!state.me)renderList()});
 $('#hideSeen').addEventListener('change',e=>{state.hideSeen=e.target.checked;refresh()});
 $('#list').addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(!b)return;focusPlace(b.dataset.id)});
 function focusPlace(id){
-  const p=byId[id];state.follow=false;$('#followBtn')?.setAttribute('aria-pressed','false');map.flyTo([p.lat,p.lng],15,{duration:.8});
+  const p=byId[id];map.flyTo([p.lat,p.lng],15,{duration:.8});
   L.popup({maxWidth:290}).setLatLng([p.lat,p.lng]).setContent(popup(p)).openOn(map);
 }
 $('#planList').addEventListener('click',e=>{const b=e.target.closest('[data-plan]');if(b)openPlan(PLANS.find(p=>p.id===b.dataset.plan))});

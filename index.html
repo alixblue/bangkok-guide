@@ -20,7 +20,7 @@
   --accent:#d4256b;            /* tuk-tuk pink */
   --accent-ink:#ffffff;
   --c-culture:#c2410c; --c-art:#7c3aed; --c-food:#d4256b; --c-market:#b7791f;
-  --c-nature:#2f855a; --c-workshop:#0e7490; --c-view:#2b50c8; --c-night:#4338ca; --c-event:#111111;
+  --c-nature:#2f855a; --c-workshop:#0e7490; --c-view:#2b50c8; --c-night:#4338ca; --c-event:#111111; --c-pop:#c026d3;
   --f-display:'Bricolage Grotesque',system-ui,sans-serif; --f-body:'Instrument Sans',system-ui,sans-serif;
   --tile-filter:none;
 }
@@ -28,13 +28,13 @@
   --bg:#12171a; --panel:#1b2226; --ink:#e8ecea; --muted:#9aa5a8; --line:#2c363b;
   --accent:#ff5c9a; --accent-ink:#1b0710;
   --c-culture:#fb923c; --c-art:#a78bfa; --c-food:#ff5c9a; --c-market:#f2c14e;
-  --c-nature:#5fd08e; --c-workshop:#4fd1e8; --c-view:#7aa2ff; --c-night:#a5b4fc; --c-event:#f5f5f5;
+  --c-nature:#5fd08e; --c-workshop:#4fd1e8; --c-view:#7aa2ff; --c-night:#a5b4fc; --c-event:#f5f5f5; --c-pop:#f0abfc;
   --tile-filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.7); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#12171a; --panel:#1b2226; --ink:#e8ecea; --muted:#9aa5a8; --line:#2c363b;
   --accent:#ff5c9a; --accent-ink:#1b0710;
   --c-culture:#fb923c; --c-art:#a78bfa; --c-food:#ff5c9a; --c-market:#f2c14e;
-  --c-nature:#5fd08e; --c-workshop:#4fd1e8; --c-view:#7aa2ff; --c-night:#a5b4fc; --c-event:#f5f5f5;
+  --c-nature:#5fd08e; --c-workshop:#4fd1e8; --c-view:#7aa2ff; --c-night:#a5b4fc; --c-event:#f5f5f5; --c-pop:#f0abfc;
   --tile-filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.7); color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -115,6 +115,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .pin.num{width:30px;height:30px;font-size:14px;background:var(--accent);color:var(--accent-ink)}
 .pin.ev{background:var(--c-event);color:var(--bg);border-radius:6px;transform:rotate(45deg)}
 .pin.ev span{transform:rotate(-45deg)}
+.pin.ev.pop{background:var(--c-pop)}
+.badge.pop{border-color:var(--c-pop);color:var(--c-pop)}
+#popSrc ul{margin:6px 0 0;padding-left:18px}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink)}
 .pop b{font:700 15px var(--f-display)}
 .pop p{margin:6px 0}
@@ -209,12 +212,24 @@ details.dist summary{cursor:pointer;font-weight:600}
       </section>
       <section class="pane" id="pane-events" hidden>
         <div class="chips" id="evFilter"></div>
+        <details class="dist" id="popSrc"><summary>Where to find pop-ups &amp; one-off events</summary>
+          <p class="meta">These listings are updated every week. Check them on Thursday to plan the weekend, then use “Add an event” below to pin what you like.</p>
+          <ul class="meta">
+            <li><a href="https://www.timeout.com/bangkok" target="_blank" rel="noopener">Time Out Bangkok</a>: weekend picks, openings, markets</li>
+            <li><a href="https://www.bkmagazine.com/things-to-do/" target="_blank" rel="noopener">BK Magazine, Things to do</a>: weekly event round-ups</li>
+            <li><a href="https://thebeat.asia/bangkok/the-list/whats-on" target="_blank" rel="noopener">The Beat Asia, What's on</a>: weekly list incl. pop-up cafés</li>
+            <li><a href="https://www.bangkokup.com/events" target="_blank" rel="noopener">Bangkok Up events calendar</a>: festivals, fairs, holidays</li>
+            <li><a href="https://www.bangkokartcity.org/discover/festivals-events" target="_blank" rel="noopener">Bangkok Art City</a>: art festivals and exhibitions</li>
+            <li><a href="https://www.businesseventsthailand.com/event-calendar/" target="_blank" rel="noopener">TCEB event calendar</a>: fairs and expos at the big venues</li>
+            <li>Instagram of malls (Siam Paragon, centralwOrld, ICONSIAM, One Bangkok, Emsphere) for atrium pop-ups</li>
+          </ul>
+        </details>
         <div id="evList"></div>
         <form class="addev" id="evForm">
           <h2 class="sec">Add an event you found (pop-up, festival, workshop)</h2>
           <input type="text" id="evTitle" placeholder="Title, e.g. K-beauty pop-up" required>
           <div class="row"><input type="date" id="evDate" required style="flex:1"><input type="text" id="evPlace" placeholder="Where" style="flex:1"></div>
-          <input type="text" id="evNote" placeholder="Note (free entry? no reservation?)">
+          <div class="row"><input type="text" id="evNote" placeholder="Note (free entry? no reservation?)" style="flex:2"><select id="evKind" style="flex:1"><option value="pop">Pop-up / fair</option><option value="fest">Festival</option></select></div>
           <div class="row"><button class="btn ghost" type="button" id="evPick">Pick spot on map</button><button class="btn" type="submit">Save</button><span class="meta" id="evPickState"></span></div>
         </form>
       </section>
@@ -580,7 +595,7 @@ const WEEKENDS = [
 ];
 
 /* Events. date ISO (start,end). approx:true = verify dates. no fixed dates => recurring */
-const E = (title,start,end,place,lat,lng,cost,note,approx=false,recurring=false)=>({title,start,end,place,lat,lng,cost,note,approx,recurring});
+const E = (title,start,end,place,lat,lng,cost,note,approx=false,recurring=false,kind='fest')=>({title,start,end,place,lat,lng,cost,note,approx,recurring,kind});
 const EVENTS = [
   E('Vegetarian (Jay) Festival','2026-10-10','2026-10-18','Yaowarat, Chinatown',13.7400,100.5090,'Free','Yellow-flag vegan food stalls all along Yaowarat. Evenings are best.',true),
   E('Chulalongkorn Day','2026-10-23','2026-10-23','Royal Plaza, Dusit',13.7667,100.5143,'Free','Public holiday. Crowds bring flowers to the King Rama V statue.'),
@@ -600,9 +615,14 @@ const EVENTS = [
   E('Chinese New Year','2027-02-06','2027-02-07','Yaowarat, Chinatown',13.7400,100.5090,'Free','Lion dances, lanterns, huge crowds. Go early evening.'),
   E('Bangkok Design Week 2027 "Design to Last"','2027-02-18','2027-02-28','Charoen Krung, Talat Noi and other districts',13.7330,100.5120,'Free','10th edition: installations, pop-ups, talks and open studios. A great last week before you leave.'),
   E('Makha Bucha Day','2027-02-21','2027-02-21','Wat Benchamabophit / local temples',13.7670,100.5140,'Free','Candlelit walks around temples at night. Alcohol sales restricted.',true),
-  E('Beauty & lifestyle pop-ups','','','Siam Paragon, CentralWorld, Siam Discovery',13.7466,100.5311,'Free entry','Makeup and brand pop-ups rotate every week or two in mall atriums. Watch the malls\' Instagram pages. Usually no booking.',false,true),
-  E('Gallery openings this week','','','Charoen Krung, Chinatown, Sathorn galleries',13.7266,100.5130,'Mostly free','BKK Art Mag publishes a weekly guide to openings and talks (bkkartmag.com). Opening nights are free and open to all.',false,true),
-  E('Weekend creative markets','','','Warehouse 30 / Jam Factory / River City',13.7300,100.5117,'Free entry','Craft and design markets pop up at weekends. Check each venue\'s social pages.',false,true),
+  E('Bangkok Illustration Fair 2026','2026-10-22','2026-10-25','centralwOrld PULSE, 7th floor',13.7467,100.5398,'Check site','Illustrators\' stalls, prints, zines and talks. Details on bangkokillustrationfair.com.',false,false,'pop'),
+  E('Book Expo Thailand 2026','2026-10-23','2026-11-01','Queen Sirikit National Convention Center',13.7236,100.5598,'Check site','31st national book fair: hundreds of publisher stalls, talks and signings. MRT QSNCC.',false,false,'pop'),
+  E('Ploenchit Fair','2026-11-21','2026-11-21','Bangkok Patana School, Sukhumvit 105',13.6700,100.6340,'~300 (2025 price)','Big charity fair, 10:00–21:00: international food stalls, crafts, games. Pay at the gate.',true,false,'pop'),
+  E('Danish Christmas Bazaar','2026-12-05','2026-12-05','Gaysorn, Ratchaprasong',13.7443,100.5414,'Free (2025)','Danish food, gløgg and Christmas crafts, 11:00–18:00.',true,false,'pop'),
+  E('Christmas market at One Bangkok','2026-12-05','2026-12-28','Boulevard, One Bangkok',13.7262,100.5470,'Check site','Evening Christmas market, around 15:00–22:00. Dates not announced yet.',true,false,'pop'),
+  E('Beauty & lifestyle pop-ups','','','Siam Paragon, CentralWorld, Siam Discovery',13.7466,100.5311,'Free entry','Makeup and brand pop-ups rotate every week or two in mall atriums. Watch the malls\' Instagram pages. Usually no booking.',false,true,'pop'),
+  E('Gallery openings this week','','','Charoen Krung, Chinatown, Sathorn galleries',13.7266,100.5130,'Mostly free','BKK Art Mag publishes a weekly guide to openings and talks (bkkartmag.com). Opening nights are free and open to all.',false,true,'pop'),
+  E('Weekend creative markets','','','Warehouse 30 / Jam Factory / River City',13.7300,100.5117,'Free entry','Craft and design markets pop up at weekends. Check each venue\'s social pages.',false,true,'pop'),
 ];
 
 /* ---------------------------------------------------------------
@@ -616,7 +636,7 @@ const state={
   cats:new Set(Object.keys(CATS)),
   max:Object.fromEntries(Object.entries(CATS).map(([k,v])=>[k,v.max])),
   seen:new Set(store.get('seen',[])), fav:new Set(store.get('fav',[])), favOnly:false,
-  q:'', hideSeen:false, sort:'cat', me:null, plan:null, evFilter:'upcoming',
+  q:'', hideSeen:false, sort:'cat', me:null, plan:null, evFilter:'upcoming', evKind:'all',
   userEvents:store.get('userEvents',[]), picking:false, pick:null,
   pos:store.get('pos',{}), moving:null, tracking:false, follow:false, watchId:null,
   wkPlan:store.get('wkPlan',{}), wkDone:new Set(store.get('wkDone',[])),
@@ -861,7 +881,9 @@ function allEvents(){return EVENTS.concat(state.userEvents.map(e=>({...e,user:tr
 function renderEvents(){
   const f=state.evFilter,now=new Date();now.setHours(0,0,0,0);
   const horizon=new Date(now);horizon.setDate(horizon.getDate()+30);
+  const k=state.evKind;
   let list=allEvents().filter(e=>{
+    if(k!=='all'&&(e.kind||'pop')!==k)return false;
     if(e.recurring)return f!=='dated';
     const s=new Date(e.start),en=new Date(e.end||e.start);
     if(f==='upcoming')return en>=now&&s<=LEAVE;
@@ -869,18 +891,20 @@ function renderEvents(){
     if(f==='dated')return true;
     return true;
   }).sort((a,b)=>(a.recurring?1:0)-(b.recurring?1:0)||new Date(a.start)-new Date(b.start));
-  $('#evFilter').innerHTML=[['upcoming','Until I leave'],['month','Next 30 days'],['dated','All dated']].map(([k,l])=>`<button class="chip" data-ev="${k}" aria-pressed="${f===k}" style="--col:var(--accent)"><i></i>${l}</button>`).join('');
+  $('#evFilter').innerHTML=[['upcoming','Until I leave'],['month','Next 30 days'],['dated','All dated']].map(([k,l])=>`<button class="chip" data-ev="${k}" aria-pressed="${f===k}" style="--col:var(--accent)"><i></i>${l}</button>`).join('')
+    +'<br>'+[['all','All types','--accent'],['fest','Festivals & holidays','--c-event'],['pop','Pop-ups & fairs','--c-pop']].map(([x,l,c])=>`<button class="chip" data-kind="${x}" aria-pressed="${k===x}" style="--col:var(${c})"><i></i>${l}</button>`).join('');
+  $('#popSrc').hidden=k==='fest';
   $('#evList').innerHTML=list.map((e,i)=>{
     const s=e.start?new Date(e.start):null;
     return `<div class="ev"><div class="date">${s?`<b>${s.getDate()}</b><span>${s.toLocaleDateString('en-GB',{month:'short'})}</span>`:'<b>↻</b><span>recurring</span>'}</div>
     <div><button class="nm" data-ev-i="${allEvents().indexOf(e)}">${esc(e.title)}</button>
-    <span class="badge ${/free/i.test(e.cost)?'free':''}">${esc(e.cost)}</span>${e.approx?'<span class="badge">verify date</span>':''}${e.user?'<span class="badge">mine</span>':''}
+    <span class="badge ${/free/i.test(e.cost)?'free':''}">${esc(e.cost)}</span>${e.approx?'<span class="badge">verify date</span>':''}${(e.kind||'pop')==='pop'?'<span class="badge pop">pop-up</span>':''}${e.user?'<span class="badge">mine</span>':''}
     <div class="meta">${s?fmt(s)+(e.end&&e.end!==e.start?' – '+fmt(new Date(e.end)):''):'Ongoing'} · ${esc(e.place)}</div>
     <div class="meta">${esc(e.note||'')}</div></div></div>`}).join('')||'<p class="meta">Nothing in this window.</p>';
   evLayer.clearLayers();
   list.forEach(e=>{
     if(e.lat==null)return;
-    L.marker([e.lat,e.lng],{icon:L.divIcon({className:'',html:'<div class="pin ev"><span>★</span></div>',iconSize:[26,26],iconAnchor:[13,13]}),title:e.title})
+    L.marker([e.lat,e.lng],{icon:L.divIcon({className:'',html:`<div class="pin ev${(e.kind||'pop')==='pop'?' pop':''}"><span>${(e.kind||'pop')==='pop'?'P':'★'}</span></div>`,iconSize:[26,26],iconAnchor:[13,13]}),title:e.title})
       .bindPopup(`<div class="pop"><b>${esc(e.title)}</b><div class="meta">${esc(e.place)}</div><p>${esc(e.note||'')}</p></div>`).addTo(evLayer);
   });
 }
@@ -956,7 +980,7 @@ $('#wkList').addEventListener('change',e=>{
   const c=e.target.closest('[data-wkdone]');if(c){c.checked?state.wkDone.add(c.dataset.wkdone):state.wkDone.delete(c.dataset.wkdone);store.set('wkDone',[...state.wkDone]);renderWeekends()}});
 $('#wkList').addEventListener('click',e=>{const b=e.target.closest('button[data-plan]');if(!b)return;
   document.querySelector('.tab[data-tab=plans]').click();openPlan(PLANS.find(p=>p.id===b.dataset.plan))});
-$('#evFilter').addEventListener('click',e=>{const b=e.target.closest('[data-ev]');if(!b)return;state.evFilter=b.dataset.ev;renderEvents()});
+$('#evFilter').addEventListener('click',e=>{const b=e.target.closest('[data-ev]'),c=e.target.closest('[data-kind]');if(b)state.evFilter=b.dataset.ev;else if(c)state.evKind=c.dataset.kind;else return;renderEvents()});
 $('#evList').addEventListener('click',e=>{const b=e.target.closest('[data-ev-i]');if(!b)return;
   const ev=allEvents()[+b.dataset.evI];if(ev&&ev.lat!=null)map.flyTo([ev.lat,ev.lng],15,{duration:.8})});
 $('#evPick').addEventListener('click',()=>{state.picking=true;$('#evPickState').textContent='Click a spot on the map…'});
@@ -966,7 +990,7 @@ map.on('click',e=>{
 $('#evForm').addEventListener('submit',e=>{
   e.preventDefault();
   const ev={title:$('#evTitle').value.trim(),start:$('#evDate').value,end:$('#evDate').value,place:$('#evPlace').value.trim()||CITY.name,
-    lat:state.pick?state.pick.lat:null,lng:state.pick?state.pick.lng:null,cost:'?',note:$('#evNote').value.trim()};
+    lat:state.pick?state.pick.lat:null,lng:state.pick?state.pick.lng:null,cost:'?',note:$('#evNote').value.trim(),kind:$('#evKind').value};
   state.userEvents.push(ev);store.set('userEvents',state.userEvents);
   e.target.reset();state.pick=null;$('#evPickState').textContent='Saved';renderEvents();
 });
